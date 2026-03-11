@@ -8,8 +8,6 @@ crowd-control/
 ├── CLAUDE.md                      # Instructions for Claude Code
 ├── structure.md                   # This file — keep up-to-date
 ├── docs/
-│   ├── conversations/
-│   │   └── initial.txt            # Initial brainstorm conversation
 │   └── plans/
 │       ├── architecture.md        # Component architecture and data flow
 │       ├── decisions.md           # Design decisions with rationale
