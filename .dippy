@@ -1,0 +1,25 @@
+# bash
+allow cat
+allow cd
+allow echo
+allow find
+allow grep
+allow head
+allow ls
+allow mkdir
+allow rg
+allow tail
+allow test
+allow wc
+
+# git
+allow git add
+allow git branch
+allow git commit
+allow git diff
+allow git log
+allow git restore
+allow git show
+allow git stash
+allow git status
+allow git worktree
