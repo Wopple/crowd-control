@@ -1,0 +1,1 @@
+"""Hook handler logic."""

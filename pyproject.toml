@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "crowd-control"
+version = "0.1.0"
+description = "Learnings retention system for Claude Code"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "Daniel" },
+]
+
+dependencies = [
+    "anthropic",
+    "click",
+    "lancedb",
+    "mcp[cli]",
+    "ollama",
+    "pydantic",
+]
+
+[project.optional-dependencies]
+voyage = ["voyageai"]
+openai = ["openai"]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[project.scripts]
+crowd-control = "crowd_control.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/crowd_control"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

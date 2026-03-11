@@ -23,3 +23,8 @@ allow git show
 allow git stash
 allow git status
 allow git worktree
+
+# uv
+uv run crowd-control
+uv run pytest
+uv run ruff

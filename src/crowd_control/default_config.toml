@@ -1,0 +1,25 @@
+[general]
+storage_dir = "~/.crowd-control"
+log_level = "info"
+
+[embedding]
+provider = "ollama"
+model = "nomic-embed-text"
+
+# [embedding.api]
+# key_env = "VOYAGE_API_KEY"
+
+[distillation]
+model = "claude-haiku-4-5-20251001"
+max_learnings_per_session = 20
+
+[retrieval]
+max_results = 15
+max_tokens = 4000
+min_similarity = 0.3
+recency_decay = 0.95
+project_boost = 1.5
+
+[ingestion]
+auto_ingest = true
+batch_size = 5
