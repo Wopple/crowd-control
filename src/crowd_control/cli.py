@@ -3,6 +3,7 @@ from pathlib import Path
 
 import click
 
+from crowd_control.ingest.distiller import DistillationError, distill_session
 from crowd_control.ingest.parser import find_sessions, parse_session_file
 from crowd_control.storage.models import TextBlock
 
@@ -31,10 +32,6 @@ def setup():
 @click.option("--dry-run", is_flag=True, help="Parse and show structure without storing.")
 def ingest(path, dry_run):
     """Ingest a session transcript."""
-    if not dry_run:
-        click.echo("Ingestion not yet implemented. Use --dry-run to preview parsing.")
-        return
-
     resolved = _resolve_session_path(path)
     if resolved is None:
         sys.exit(1)
@@ -45,14 +42,53 @@ def ingest(path, dry_run):
         click.echo(f"Error parsing {resolved}: {e}", err=True)
         sys.exit(1)
 
+    if dry_run:
+        _print_dry_run(session)
+        return
+
+    # Full ingestion: parse + distill
+    qualifying = [s for s in session.segments if len(s.messages) >= 2]
+    click.echo(f"Session {session.session_id}: {len(qualifying)} segments to distill")
+
+    def _progress(i: int, total: int) -> None:
+        click.echo(f"  Distilling segment {i + 1}/{total}...")
+
+    try:
+        learnings = distill_session(session, progress_callback=_progress)
+    except DistillationError as e:
+        click.echo(f"Distillation failed: {e}", err=True)
+        sys.exit(1)
+
+    click.echo(f"\nExtracted {len(learnings)} learnings:\n")
+    for i, learning in enumerate(learnings, 1):
+        click.echo(f"  [{i}] ({learning.category}) [confidence={learning.confidence:.2f}]")
+        click.echo(f"      {learning.text}")
+        if learning.tags:
+            click.echo(f"      tags: {', '.join(learning.tags)}")
+        click.echo()
+
+
+@main.command()
+@click.argument("query")
+def search(query):
+    """Search learnings for a query."""
+    click.echo("Search not yet implemented.")
+
+
+@main.command()
+def serve():
+    """Run the MCP server (stdio transport)."""
+    click.echo("MCP server not yet implemented.")
+
+
+def _print_dry_run(session) -> None:
+    """Print session structure without distilling."""
     filtered_count = sum(len(s.messages) for s in session.segments)
     click.echo(f"Session: {session.session_id}")
     click.echo(f"Project: {session.project_path}")
     click.echo(f"Branch:  {session.git_branch or '(none)'}")
     click.echo(f"Model:   {session.model or '(unknown)'}")
-    click.echo(
-        f"Period:  {_fmt_time(session.start_time)} → {_fmt_time(session.end_time)}"
-    )
+    click.echo(f"Period:  {_fmt_time(session.start_time)} → {_fmt_time(session.end_time)}")
     click.echo(f"Messages: {session.message_count} total, {filtered_count} after filtering")
     click.echo()
 
@@ -70,19 +106,6 @@ def ingest(path, dry_run):
         preview = _get_user_preview(seg)
         if preview:
             click.echo(f'      User: "{preview}"')
-
-
-@main.command()
-@click.argument("query")
-def search(query):
-    """Search learnings for a query."""
-    click.echo("Search not yet implemented.")
-
-
-@main.command()
-def serve():
-    """Run the MCP server (stdio transport)."""
-    click.echo("MCP server not yet implemented.")
 
 
 def _resolve_session_path(path: str | None) -> Path | None:

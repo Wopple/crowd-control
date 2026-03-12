@@ -1,0 +1,29 @@
+{
+  "model": "claude-haiku-4-5",
+  "cost_usd": 0.0012,
+  "duration_ms": 2345,
+  "is_error": false,
+  "session_id": "test-distill-session",
+  "structured_output": {
+    "learnings": [
+      {
+        "text": "The parser uses a segmentation strategy that splits on user messages but keeps tool-result messages in the same segment as the preceding assistant tool-use. This prevents splitting mid-interaction.",
+        "category": "architecture_decision",
+        "tags": ["parser", "segmentation", "jsonl"],
+        "confidence": 0.92
+      },
+      {
+        "text": "ToolResultBlock content is truncated to 500 chars (head+tail) when the original exceeds that limit. The original_length field preserves the pre-truncation size for debugging.",
+        "category": "pattern_discovery",
+        "tags": ["parser", "truncation", "models"],
+        "confidence": 0.88
+      },
+      {
+        "text": "The project uses pydantic discriminated unions (Field(discriminator='type')) for content blocks, which means all block types must have a literal 'type' field. Adding a new block type requires updating the ContentBlock union.",
+        "category": "gotcha",
+        "tags": ["pydantic", "models", "python"],
+        "confidence": 0.85
+      }
+    ]
+  }
+}

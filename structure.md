@@ -8,6 +8,7 @@ crowd-control/
 ├── CLAUDE.md                      # Instructions for Claude Code
 ├── structure.md                   # This file — keep up-to-date
 ├── docs/
+│   ├── distillation.md           # How the distillation pipeline works
 │   └── plans/
 │       ├── architecture.md        # Component architecture and data flow
 │       ├── decisions.md           # Design decisions with rationale
@@ -17,7 +18,7 @@ crowd-control/
 ├── src/
 │   └── crowd_control/
 │       ├── __init__.py            # Package version
-│       ├── cli.py                 # CLI entry point (click) — ingest --dry-run working
+│       ├── cli.py                 # CLI entry point (click) — ingest with distillation, --dry-run
 │       ├── config.py              # Configuration loading and defaults (stub)
 │       ├── server.py              # MCP server definition (stub)
 │       ├── hooks.py               # Hook handler logic (stub)
@@ -25,7 +26,7 @@ crowd-control/
 │       ├── ingest/
 │       │   ├── __init__.py
 │       │   ├── parser.py          # JSONL parsing, segmentation, session discovery
-│       │   ├── distiller.py       # LLM-powered learning extraction (stub)
+│       │   ├── distiller.py       # LLM-powered learning extraction via claude -p
 │       │   └── pipeline.py        # End-to-end ingestion pipeline (stub)
 │       ├── embed/
 │       │   ├── __init__.py
@@ -46,22 +47,24 @@ crowd-control/
     ├── test_cli.py                # CLI smoke tests
     ├── test_models.py             # Data model construction and serialization tests
     ├── test_parser.py             # JSONL parser and segmentation tests
+    ├── test_distiller.py          # Distillation pipeline tests (mocked subprocess)
     └── fixtures/
         ├── sample_session.jsonl   # Multi-segment session with tool calls
         ├── minimal_session.jsonl  # Minimal 1-segment session
-        └── compact_session.jsonl  # Session with compact_boundary split
+        ├── compact_session.jsonl  # Session with compact_boundary split
+        └── distillation_response.json  # Canned claude -p response for tests
 ```
 
 ## Status
 
 | Module | Status |
 |--------|--------|
-| `cli.py` | `ingest --dry-run` working, other commands stubbed |
+| `cli.py` | `ingest` with distillation, `--dry-run` preview, other commands stubbed |
 | `config.py` | Stub |
 | `server.py` | Stub |
 | `hooks.py` | Stub |
 | `ingest/parser.py` | Implemented — parsing, segmentation, discovery |
-| `ingest/distiller.py` | Stub |
+| `ingest/distiller.py` | Implemented — prompt building, claude -p invocation, learning extraction |
 | `ingest/pipeline.py` | Stub |
 | `storage/models.py` | Implemented — all data models |
 | `embed/*` | Stubs |

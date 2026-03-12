@@ -84,8 +84,13 @@ class ConversationSegment(BaseModel):
     start_time: datetime
     end_time: datetime
 
-    def to_prompt_text(self) -> str:
-        """Render this segment as a readable transcript for the distillation prompt."""
+    def to_prompt_text(self, include_thinking: bool = True) -> str:
+        """Render this segment as a readable transcript for the distillation prompt.
+
+        Args:
+            include_thinking: If False, skip ThinkingBlock entries. Default True
+                for backwards compatibility.
+        """
         lines: list[str] = []
         for msg in self.messages:
             if msg.is_meta:
@@ -95,11 +100,13 @@ class ConversationSegment(BaseModel):
                 if isinstance(block, TextBlock):
                     lines.append(f"{prefix}: {block.text}")
                 elif isinstance(block, ToolUseBlock):
-                    lines.append(f"{prefix} [tool_use]: {block.name}({_summarize_input(block.input)})")
+                    lines.append(
+                        f"{prefix} [tool_use]: {block.name}({_summarize_input(block.input)})"
+                    )
                 elif isinstance(block, ToolResultBlock):
                     lines.append(f"{prefix} [tool_result]: {block.content}")
                 elif isinstance(block, ThinkingBlock):
-                    if block.thinking:
+                    if include_thinking and block.thinking:
                         lines.append(f"{prefix} [thinking]: {block.thinking}")
         return "\n".join(lines)
 
