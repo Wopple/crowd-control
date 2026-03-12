@@ -366,15 +366,17 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "ruff" },
-]
 openai = [
     { name = "openai" },
 ]
 voyage = [
     { name = "voyageai" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
 ]
 
 [package.metadata]
@@ -385,11 +387,15 @@ requires-dist = [
     { name = "ollama" },
     { name = "openai", marker = "extra == 'openai'" },
     { name = "pydantic" },
-    { name = "pytest", marker = "extra == 'dev'" },
-    { name = "ruff", marker = "extra == 'dev'" },
     { name = "voyageai", marker = "extra == 'voyage'" },
 ]
-provides-extras = ["voyage", "openai", "dev"]
+provides-extras = ["voyage", "openai"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
 
 [[package]]
 name = "cryptography"

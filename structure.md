@@ -18,44 +18,53 @@ crowd-control/
 ├── src/
 │   └── crowd_control/
 │       ├── __init__.py            # Package version
-│       ├── cli.py                 # CLI entry point (click)
-│       ├── config.py              # Configuration loading and defaults
-│       ├── server.py              # MCP server definition (FastMCP)
-│       ├── hooks.py               # Hook handler logic
+│       ├── cli.py                 # CLI entry point (click) — ingest --dry-run working
+│       ├── config.py              # Configuration loading and defaults (stub)
+│       ├── server.py              # MCP server definition (stub)
+│       ├── hooks.py               # Hook handler logic (stub)
 │       ├── default_config.toml    # Default config template
 │       ├── ingest/
 │       │   ├── __init__.py
-│       │   ├── parser.py          # Parse JSONL session transcripts
-│       │   ├── distiller.py       # LLM-powered learning extraction
-│       │   └── pipeline.py        # End-to-end ingestion pipeline
+│       │   ├── parser.py          # JSONL parsing, segmentation, session discovery
+│       │   ├── distiller.py       # LLM-powered learning extraction (stub)
+│       │   └── pipeline.py        # End-to-end ingestion pipeline (stub)
 │       ├── embed/
 │       │   ├── __init__.py
-│       │   ├── base.py            # Embedder protocol
-│       │   ├── ollama.py          # Ollama embedding provider
-│       │   ├── voyage.py          # Voyage AI provider
-│       │   └── openai.py          # OpenAI provider
+│       │   ├── base.py            # Embedder protocol (stub)
+│       │   ├── ollama.py          # Ollama embedding provider (stub)
+│       │   ├── voyage.py          # Voyage AI provider (stub)
+│       │   └── openai.py          # OpenAI provider (stub)
 │       ├── storage/
 │       │   ├── __init__.py
-│       │   ├── db.py              # LanceDB operations
-│       │   └── models.py          # Data models (Learning, Session, etc.)
+│       │   ├── db.py              # LanceDB operations (stub)
+│       │   └── models.py          # Data models (all Phase 1 models implemented)
 │       └── retrieve/
 │           ├── __init__.py
-│           ├── search.py          # Vector search + metadata filtering
-│           └── rank.py            # Recency decay, dedup, token packing
+│           ├── search.py          # Vector search + metadata filtering (stub)
+│           └── rank.py            # Recency decay, dedup, token packing (stub)
 └── tests/
     ├── conftest.py                # Shared fixtures
-    └── test_cli.py                # CLI smoke tests
+    ├── test_cli.py                # CLI smoke tests
+    ├── test_models.py             # Data model construction and serialization tests
+    ├── test_parser.py             # JSONL parser and segmentation tests
+    └── fixtures/
+        ├── sample_session.jsonl   # Multi-segment session with tool calls
+        ├── minimal_session.jsonl  # Minimal 1-segment session
+        └── compact_session.jsonl  # Session with compact_boundary split
 ```
 
 ## Status
 
 | Module | Status |
 |--------|--------|
-| `cli.py` | Skeleton — all commands stubbed |
+| `cli.py` | `ingest --dry-run` working, other commands stubbed |
 | `config.py` | Stub |
 | `server.py` | Stub |
 | `hooks.py` | Stub |
-| `ingest/*` | Stubs |
+| `ingest/parser.py` | Implemented — parsing, segmentation, discovery |
+| `ingest/distiller.py` | Stub |
+| `ingest/pipeline.py` | Stub |
+| `storage/models.py` | Implemented — all data models |
 | `embed/*` | Stubs |
-| `storage/*` | Stubs |
+| `storage/db.py` | Stub |
 | `retrieve/*` | Stubs |

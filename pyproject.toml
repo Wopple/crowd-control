@@ -24,6 +24,8 @@ dependencies = [
 [project.optional-dependencies]
 voyage = ["voyageai"]
 openai = ["openai"]
+
+[dependency-groups]
 dev = [
     "pytest",
     "ruff",
