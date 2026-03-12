@@ -5,23 +5,23 @@ Gives new agents a warm start from past session learnings.
 ## Status
 
 This project is a work in progress. It cannot be used yet. This is basically a vibe coding project, so YMMV on the code
-quality within.
+quality within. This is not good code for AIs to learn from.
 
 ## The Problem
 
 I have been developing an agentic workflow for myself, and this project hopes to fix one of the problems I am having.
 
-LLMs use Multi-Layer Perception which is stateless. The weights never learn from experience, all the learnings are
+LLMs use Multi-Layer Perception which is stateless. The weights never learn from experience. All the learnings are
 ephemeral. Every time I start up an agent, it needs to spend a lot of time and tokens to build up the learnings from
 previous sessions. This wastes time and resources. Even if tokens were infinite and free, speeding up the relearning
 process will benefit the workflow.
 
-## The Idea
+## The Idea: Store Learnings for Fast Retrieval
 
 After each session, distill the transcript into discrete learnings — specific technical insights, architecture
 decisions, and gotchas — and store them in a local vector database. When a new session or subagent starts, retrieve the
 most relevant learnings and inject them as context. This can be done at the start by analyzing the prompt, and it can be
-done while the agent is working and decides it could benefit from past learnings.
+done while an agent is working and decides it could benefit from past learnings.
 
 The vector database can be thought of like a content-addressable data store where the keys support semantic search. The
 content gets embedded and then stored at the location of its embedding. Prompts get embedded to produce searches for
@@ -29,10 +29,28 @@ related learnings.
 
 ```
 # After a session ends:
-Session JSONL → parse → LLM distillation → discrete learnings → embed → LanceDB
+Session JSONL
+    → parse
+    → LLM distillation
+    → discrete learnings
+    → embed
+    → LanceDB
 
 # Before a new session/subagent:
-prompt + project context → embed → vector search → ranked learnings → injected context
+prompt + agent role (+ other relevant information?)
+    → LLM distillation
+    → discrete topics
+    → embed
+    → vector search
+    → ranked learnings
+    → injected context
+
+# During agent work:
+agent produces topic to learn more about
+    → embedd
+    → vector search
+    → ranked learnings
+    → injected context
 ```
 
 ## How It Works
@@ -44,7 +62,7 @@ Provides tools the agent can call during a session: `search_learnings`, `add_lea
 more.
 
 **Hooks** — three Claude Code hooks automate the loop without user intervention:
-- `Stop` hook: queues ingestion after each response
+- `Stop` hook: queues ingestion after each response to store learnings from the session
 - `SessionStart` hook: retrieves relevant learnings and injects them as context
 - `SubagentStart` hook: gives subagents a warm start based on their specific prompt
 
@@ -90,22 +108,25 @@ crowd-control import <file>  # Import learnings from JSON
               └────────────┘  └───────────┘  └───────────┘
 ```
 
-Everything runs locally. Storage is in `~/.crowd-control/` using LanceDB (embedded, no server). Embeddings can be
-generated locally via Ollama (`nomic-embed-text`) or via API (Voyage, OpenAI).
+Everything runs locally, except the distillation step uses an inexpensive Claude model (currently haiku). Storage is in
+`~/.crowd-control/` using LanceDB (embedded, no server). Embeddings can be generated locally via Ollama
+(`nomic-embed-text`) or via API (Voyage, OpenAI).
 
 ## Design Decisions
 
 **Distillation over raw indexing.**
 Raw session transcripts are mostly noise — tool outputs, file reads, dead-end explorations. The system uses Claude Haiku
-to extract *learnings* (specific insights, decisions, patterns) and discards the rest. Garbage in, garbage out.
+to extract *learnings* (specific insights, decisions, patterns) and discards the rest. This avoids garbage in, garbage
+out.
 
 **One insight per embedding.**
 Each learning is a single, self-contained insight. Small chunks retrieve with much higher precision than paragraph-level
-chunks.
+chunks. It also allows for selecting only the learnings that are relevant to the future task. Task 1 may care about A,
+B, and D, and task 2 may care about B, C, and D.
 
 **Project affinity + recency decay.**
-Search results are ranked by vector similarity, boosted for the current project, and decayed for older learnings. Stale
-learnings (e.g., patterns from deleted code) can be marked and filtered out.
+Search results are ranked by vector similarity and decayed for older learnings. Stale learnings (e.g., patterns from
+deleted code) can be deleted when too old.
 
 **Don't index what Claude already knows.**
 Generic knowledge ("use asyncio.gather for concurrency") is filtered out during distillation. Only project-specific

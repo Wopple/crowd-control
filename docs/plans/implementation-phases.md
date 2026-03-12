@@ -23,9 +23,9 @@
 ## Phase 2: Distillation pipeline
 
 - Implement the distillation prompt (extract learnings from session segments)
-- Call Claude Haiku API for cost-effective extraction
+- Call Claude Code CLI (`claude -p`) with `--json-schema` for structured extraction
 - Parse structured output into `Learning` objects
-- Handle rate limits, errors, and retries
+- Handle subprocess errors, timeouts, and retries
 - Add category classification and tag extraction
 - Write tests with mocked API responses
 

@@ -13,6 +13,7 @@ crowd-control/
 │       ├── decisions.md           # Design decisions with rationale
 │       ├── implementation-phases.md  # High-level phase overview
 │       ├── phase-0-scaffolding.md    # Detailed Phase 0 steps
+│       ├── phase-1-parsing-and-models.md  # Detailed Phase 1 steps
 │       └── project-structure.md   # Dependencies, config schema
 ├── src/
 │   └── crowd_control/

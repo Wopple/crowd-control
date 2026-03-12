@@ -206,8 +206,7 @@ since subagents have access to MCP tools.
 2. **Ecosystem fit.** Every dependency has first-class Python support:
    - `mcp` (Python MCP SDK with FastMCP)
    - `lancedb` (Python bindings over Rust core)
-   - `ollama` (Python client)
-   - `anthropic` (Python SDK for distillation)
+   - `ollama` (Python client for local embeddings)
    - `voyageai` / `openai` (Python SDKs for alternative embeddings)
 
 3. **Development speed.** This is a tool/glue project — it orchestrates API calls, does
@@ -235,7 +234,7 @@ Target **Python 3.11+** for:
 
 1. **Session ingestion**
    - Parse Claude Code JSONL session transcripts
-   - LLM-powered distillation to extract learnings (using Haiku for cost efficiency)
+   - LLM-powered distillation to extract learnings (via Claude Code CLI)
    - Embed learnings and store in LanceDB
    - Tag with project, category, languages, frameworks
 
@@ -293,6 +292,11 @@ Target **Python 3.11+** for:
     - Track which learnings are retrieved most often
     - Track which learnings are retrieved but not useful (agent ignores them)
     - Surface under-utilized learnings
+
+12. **Mixed knowledge scope**
+    - Distiller classifies learnings as project-specific or universal
+    - Retrieval merges project-scoped learnings with the universal pool
+    - Requires tuning the classification prompt to avoid over/under-sharing
 
 ### Non-goals
 
@@ -372,3 +376,138 @@ uv publish                 # Uploads to PyPI (requires PYPI_TOKEN)
 | Flit       | Very minimal                  | No lockfile, less active          |
 | Setuptools | Universal                     | Verbose config, legacy feel       |
 | PDM        | Standards-compliant           | Smaller community                 |
+
+---
+
+## Decision 9: Distillation via Claude Code CLI, not the Anthropic API
+
+**Recommendation: Use `claude -p` (Claude Code's non-interactive mode) as the only distillation backend.**
+
+### Rationale
+
+Crowd Control is a Claude Code extension. Every user already has Claude Code installed with an
+active subscription. Requiring a separate Anthropic API key for distillation would be bad
+ergonomics — it adds setup friction and a second billing relationship for a tool that's supposed
+to be drop-in.
+
+### How it works
+
+Claude Code's CLI supports non-interactive mode:
+
+```bash
+claude -p "prompt" \
+  --model haiku \
+  --output-format json \
+  --json-schema '{"type":"object",...}' \
+  --no-session-persistence \
+  --max-budget-usd 0.05
+```
+
+Key flags:
+- `--print` (`-p`): non-interactive mode, reads prompt from argument or stdin
+- `--model`: select the model (use `haiku` for cost-effective distillation)
+- `--output-format json`: structured JSON response
+- `--json-schema`: enforce output schema for reliable parsing into `Learning` objects
+- `--no-session-persistence`: don't save the distillation call as a session (avoid recursion)
+- `--max-budget-usd`: safety cap per distillation call
+
+### Implementation
+
+The distiller shells out to the `claude` CLI as a subprocess:
+
+```python
+import subprocess, json
+
+result = subprocess.run(
+    ["claude", "-p", prompt,
+     "--model", "haiku",
+     "--output-format", "json",
+     "--json-schema", schema_json,
+     "--no-session-persistence"],
+    capture_output=True, text=True, timeout=120
+)
+learnings = json.loads(result.stdout)
+```
+
+### Trade-offs
+
+| Aspect | Claude Code CLI | Anthropic API (not implemented) |
+|--------|----------------|--------------------------------|
+| Setup | Zero — already installed | Requires API key |
+| Billing | User's existing subscription | Separate API billing |
+| Structured output | `--json-schema` flag | Native tool_use / JSON mode |
+| Model selection | `--model haiku` | Full model ID |
+| Rate limits | Shared with interactive use | Separate API limits |
+| Latency | Process spawn overhead (~1s) | Direct HTTP, lower latency |
+
+The CLI approach is the right default. Direct API access could be added later as an optional
+provider for users who want lower latency or separate rate limits, but it is not in scope for
+MVP.
+
+---
+
+## Decision 10: Project-scoped vs shared knowledge
+
+**Recommendation: Configurable, default to project-scoped.**
+
+### Rationale
+
+Not all learnings are project-specific. A debugging technique for async Python applies everywhere.
+But most learnings *are* project-specific — codebase conventions, architecture decisions, gotchas
+tied to particular dependencies. Mixing project-specific learnings from unrelated codebases adds
+noise to retrieval.
+
+### Design
+
+A `knowledge.scope` config option with three values:
+
+- **`project`** (default): retrieval filters by the current project. Only learnings from sessions
+  in this project are surfaced. Clean separation, no cross-contamination.
+- **`shared`**: all learnings go into a single pool. Retrieval searches everything. The
+  `project_boost` config parameter up-ranks matches from the current project while still
+  surfacing cross-project results.
+- **`mixed`** (v0.2+): the distiller classifies each learning as project-specific or universal
+  during extraction. Project-specific learnings are scoped to their source project. Universal
+  learnings go into a shared pool. At retrieval time, both the current project's learnings and
+  the shared pool are searched and merged. See "Mixed scope design" below.
+
+### Mixed scope design (v0.2+)
+
+In `mixed` mode, the distiller makes a per-learning decision about whether an insight is
+project-specific or broadly applicable. This requires changes to the distillation prompt
+(Phase 2) and retrieval logic (Phase 4):
+
+**Distillation:** the distillation prompt asks the LLM to classify each learning as
+`project_specific` or `universal`. The classification is based on whether the insight depends
+on the particular codebase (conventions, architecture, dependency quirks) or is transferable
+(debugging techniques, tool usage patterns, language idioms that aren't common knowledge).
+
+**Data model:** the `Learning` model gains a `shared: bool` field (default `False`). When
+`shared` is `True`, the learning is visible to all projects during retrieval.
+
+**Retrieval:** queries search for `(project == current_project) OR (shared == True)`. This
+gives each project its own learnings plus the universal pool, without cross-contamination
+between unrelated projects.
+
+**Why defer to v0.2+:** mixed mode depends on the distiller (Phase 2) being implemented and
+tuned. The classification prompt needs iteration — an overly aggressive classifier will dump
+project-specific noise into the shared pool, while an overly conservative one makes mixed
+mode equivalent to project mode. It's better to ship `project` and `shared` first, get real
+usage data, then build `mixed` on top with good examples of what "universal" means in practice.
+
+### Data model impact
+
+For `project` and `shared` modes: none. The `project` field on `Learning` is always set to
+the source project path. Scope only changes retrieval query construction. Users can switch
+between these modes without re-ingesting.
+
+For `mixed` mode: adds a `shared: bool` field to `Learning`. Existing learnings default to
+`shared=False` (project-scoped), so switching to `mixed` mode is backwards compatible — old
+learnings behave as project-scoped, and new learnings get classified going forward.
+
+### Configuration
+
+```toml
+[knowledge]
+scope = "project"   # "project", "shared", or "mixed" (v0.2+)
+```

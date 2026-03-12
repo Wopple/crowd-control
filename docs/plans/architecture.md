@@ -42,8 +42,8 @@ The system ships as a **Python package** that bundles:
                     │               │              │
               ┌─────▼──────┐  ┌─────▼─────┐  ┌─────▼─────┐
               │ Distiller  │  │ Embedder  │  │ LanceDB   │
-              │ (Claude    │  │ (Ollama/  │  │ (local    │
-              │  Haiku)    │  │  Voyage)  │  │  storage) │
+              │ (claude -p │  │ (Ollama/  │  │ (local    │
+              │  CLI)      │  │  Voyage)  │  │  storage) │
               └────────────┘  └───────────┘  └───────────┘
 ```
 
@@ -167,6 +167,20 @@ crowd-control import <file>  # Import learnings from JSON
     └── ingestion.log
 ```
 
+## Knowledge Scope
+
+Learnings can be scoped in three ways, controlled by `knowledge.scope` in config:
+
+- **`project`** (default): retrieval is filtered to the current project. Learnings from other projects are not surfaced. This prevents irrelevant context from unrelated codebases.
+- **`shared`**: retrieval searches all learnings regardless of source project. Useful when working across related repos or when most learnings are broadly applicable.
+- **`mixed`** (v0.2+): the distiller classifies each learning as project-specific or universal. At retrieval time, the current project's learnings are merged with the universal pool. This gives each project its own knowledge plus shared insights, without cross-contamination between unrelated projects.
+
+In all modes, every learning records its source `project` for provenance. For `project` and `shared`, the scope setting only changes retrieval behavior — switching between them does not require re-ingesting data.
+
+`mixed` mode adds a `shared: bool` field to each learning, set by the distiller during extraction. Existing learnings default to `shared=False`, so switching to `mixed` is backwards compatible.
+
+When scope is `project`, the `project_boost` retrieval parameter has no effect (all results are already from the current project). When scope is `shared` or `mixed`, `project_boost` up-ranks learnings from the current project.
+
 ## Learning Data Model
 
 Each learning stored in LanceDB:
@@ -178,9 +192,10 @@ Each learning stored in LanceDB:
 | text        | string     | The learning content                           |
 | category    | string     | architecture_decision, debugging_insight, etc. |
 | tags        | list[str]  | Languages, frameworks, concepts                |
-| project     | string     | Project path or identifier                     |
+| project     | string     | Source project path (always set for provenance) |
 | session_id  | string     | Source session ID                               |
 | git_sha     | string     | Git SHA at time of learning (if available)     |
 | timestamp   | datetime   | When the learning was extracted                |
 | confidence  | float      | How significant/reliable the learning is       |
 | stale       | bool       | Whether the learning has been marked stale     |
+| shared      | bool       | Universal learning visible to all projects (mixed scope only) |

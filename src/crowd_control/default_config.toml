@@ -2,6 +2,12 @@
 storage_dir = "~/.crowd-control"
 log_level = "info"
 
+[knowledge]
+# "project" = learnings scoped to source project, retrieval filtered by current project
+# "shared"  = all learnings in one pool, retrieval searches everything
+# "mixed"   = distiller classifies each learning as project-specific or universal (v0.2+)
+scope = "project"
+
 [embedding]
 provider = "ollama"
 model = "nomic-embed-text"
@@ -10,7 +16,7 @@ model = "nomic-embed-text"
 # key_env = "VOYAGE_API_KEY"
 
 [distillation]
-model = "claude-haiku-4-5-20251001"
+model = "haiku"                     # Claude Code model alias (passed to claude -p --model)
 max_learnings_per_session = 20
 
 [retrieval]

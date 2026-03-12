@@ -63,10 +63,13 @@ crowd-control/
 |-------------|------------------------------------|--------------------------|
 | `mcp`       | MCP server framework (FastMCP)     | `mcp[cli]` for dev tools |
 | `lancedb`   | Vector database                    | Embedded, Rust-backed    |
-| `anthropic` | Distillation via Claude API        | For learning extraction  |
 | `ollama`    | Local embedding (default provider) | Optional if using API    |
 | `click`     | CLI framework                      | Clean, composable CLI    |
 | `pydantic`  | Data validation and models         | Already a dep of `mcp`   |
+
+Note: distillation uses the Claude Code CLI (`claude -p`), not the `anthropic` Python SDK.
+This avoids requiring a separate API key — the user's existing Claude Code subscription is
+used.
 
 ### Optional (for alternative embedding providers)
 
@@ -102,6 +105,9 @@ Default location: `~/.crowd-control/config.toml`
 storage_dir = "~/.crowd-control"
 log_level = "info"
 
+[knowledge]
+scope = "project"                      # "project", "shared", or "mixed" (v0.2+)
+
 [embedding]
 provider = "ollama"                # "ollama", "voyage", "openai"
 model = "nomic-embed-text"
@@ -110,7 +116,7 @@ model = "nomic-embed-text"
 # key_env = "VOYAGE_API_KEY"      # Uncomment for API providers
 
 [distillation]
-model = "claude-haiku-4-5-20251001"
+model = "haiku"                        # Claude Code model alias (passed to claude -p --model)
 max_learnings_per_session = 20
 
 [retrieval]
