@@ -1,12 +1,29 @@
 Read `structure.md`.
 Keep `structure.md` up-to-date as files are added, removed, and updated.
 Read `README.md` for project goals and background.
-Read all files in `@docs/plans/`.
-Document all planning in `@docs/plans`.
+Read all files in `@docs/` (excluding `docs/plans/`) for documentation on what is implemented.
+
+## Documentation
+
+There are two kinds of docs in this project:
+
+- `docs/plans/` — ephemeral planning documents. These exist only to support implementation
+  and should not be read to understand what is already built. They may be outdated or
+  describe things that haven't been implemented yet.
+- `docs/` — durable implementation documentation. This describes what exists, how it works,
+  and how the pieces connect. An agent should be able to understand the system from these
+  docs without reading source code.
+
+When implementing a phase, write or update docs in `docs/` (not `docs/plans/`). This is
+part of completing the phase, not a separate task.
+
+## Planning
+
+Document all planning in `@docs/plans/`.
 
 ## Development
 
-This is a uv project. Use `uv run` to execute all commands.
+This is a uv project. Use `uv run` to execute project commands.
 
 ```
 uv sync              # Install/update dependencies (run after changing pyproject.toml)
@@ -17,8 +34,7 @@ uv run ruff format   # Format
 uv run crowd-control --help   # Run the CLI
 ```
 
-Do NOT use `.venv/bin/python`, `python -m pytest`, or bare `pytest`. Always use `uv run`.
+## Tests
 
-Dev dependencies (pytest, ruff) are in `[dependency-groups] dev` in pyproject.toml, not
-`[project.optional-dependencies]`. This is important — uv auto-installs dependency groups
-but not optional dependencies.
+Tests must not call claude code or query any LLM. Tests cannot assume a connection to an embedding model either. You may
+use claude code or an embedding model for generating test data. Tests can be written against that test data.

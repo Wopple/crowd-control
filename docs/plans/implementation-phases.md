@@ -24,12 +24,14 @@
 
 - Implement the distillation prompt (extract learnings from session segments)
 - Call Claude Code CLI (`claude -p`) with `--json-schema` for structured extraction
-- Parse structured output into `Learning` objects
-- Handle subprocess errors, timeouts, and retries
+- Parse structured output into `Learning` objects with robust JSON extraction
+- Handle subprocess errors, timeouts, and retries (with backoff)
 - Add category classification and tag extraction
-- Write tests with mocked API responses
+- Exclude thinking blocks from distillation input (only distill outcomes)
+- Add `include_thinking` parameter to `ConversationSegment.to_prompt_text()`
+- Write tests with mocked subprocess responses
 
-**Deliverable:** `crowd-control ingest <path>` prints extracted learnings to stdout.
+**Deliverable:** `crowd-control ingest <path>` prints extracted learnings to stdout with progress.
 
 ## Phase 3: Embedding and storage
 
@@ -37,10 +39,14 @@
 - Connect to LanceDB and create the learnings table schema
 - Embed learnings and insert into LanceDB
 - Implement basic CRUD operations (list, get, delete)
+- Deduplicate learnings at storage time:
+  - Reject exact-duplicate text (same learning text already in the DB)
+  - Reject near-duplicates by embedding similarity (learnings within a small cosine distance of an existing learning). Threshold TBD — needs experimentation, but ~0.95 similarity is a starting point.
+  - This prevents re-ingesting the same session from creating duplicate entries
 - Add Voyage and OpenAI embedding providers
 - Write tests with in-memory or temp-dir LanceDB
 
-**Deliverable:** Full ingestion pipeline works end-to-end. Learnings stored and queryable.
+**Deliverable:** Full ingestion pipeline works end-to-end. Learnings stored and queryable. Duplicate learnings are rejected.
 
 ## Phase 4: Retrieval and ranking
 

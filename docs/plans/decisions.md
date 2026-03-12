@@ -130,10 +130,25 @@ class Embedder(Protocol):
     def embed(self, texts: list[str]) -> list[list[float]]: ...
     @property
     def dimensions(self) -> int: ...
+    @property
+    def max_input_chars(self) -> int: ...
 ```
 
+Each provider knows its own input limit:
+
+| Model                  | Max tokens | Approx max chars |
+|------------------------|------------|------------------|
+| nomic-embed-text       | 8192       | 32000            |
+| voyage-code-3          | 16000      | 64000            |
+| text-embedding-3-small | 8191       | 32000            |
+
+The `max_input_chars` property is used by the distillation prompt to tell the LLM how
+large each learning can be. This keeps the distiller and embedder loosely coupled — the
+distiller doesn't need to know which embedding model is configured, it just asks for the
+limit.
+
 This is one of the few places where configurability is warranted because it has a real
-impact on user experience and the interface is tiny (one method + one property).
+impact on user experience and the interface is tiny (two methods + two properties).
 
 ---
 
@@ -293,7 +308,14 @@ Target **Python 3.11+** for:
     - Track which learnings are retrieved but not useful (agent ignores them)
     - Surface under-utilized learnings
 
-12. **Mixed knowledge scope**
+12. **Pipeline telemetry**
+    - Structured logging at each pipeline stage (parsing, distillation, embedding, retrieval)
+    - Captures input sizes, truncation rates, learning counts, confidence distributions,
+      call durations, similarity scores, token budget usage
+    - Enables post-hoc analysis to identify tuning opportunities and implementation weaknesses
+    - See Decision 11 for full details
+
+13. **Mixed knowledge scope**
     - Distiller classifies learnings as project-specific or universal
     - Retrieval merges project-scoped learnings with the universal pool
     - Requires tuning the classification prompt to avoid over/under-sharing
@@ -511,3 +533,82 @@ learnings behave as project-scoped, and new learnings get classified going forwa
 [knowledge]
 scope = "project"   # "project", "shared", or "mixed" (v0.2+)
 ```
+
+---
+
+## Decision 11: Pipeline telemetry logging
+
+**Recommendation: Log structured telemetry at each pipeline stage for post-hoc analysis and tuning.**
+
+### Rationale
+
+The pipeline has several stages where quality is hard to evaluate in real time: parsing,
+truncation, distillation prompt construction, LLM extraction, embedding, retrieval ranking.
+Getting these right requires iteration based on real data. Without telemetry, the only way
+to identify weaknesses is to re-run sessions manually and inspect output — which doesn't
+scale.
+
+Structured logs let us answer questions like:
+- How often are tool results being truncated? By how much?
+- How large are segments before and after truncation?
+- How many learnings is the distiller extracting per segment? Per session?
+- Are certain segments producing zero learnings consistently?
+- What's the confidence distribution of extracted learnings?
+- How long are distillation calls taking?
+- How often does retrieval hit the similarity floor?
+- What fraction of the token budget is being used at injection time?
+
+### What to log
+
+**Parsing stage:**
+- Session file size (bytes) and line count
+- Lines skipped (by type: progress, file-history-snapshot, etc.)
+- Messages after filtering
+- Number of segments produced
+- Per-segment: message count, tool result count, truncation count, chars before/after truncation
+
+**Distillation stage:**
+- Per-segment: prompt size (chars), segment text size before/after truncation
+- Per-segment: number of learnings extracted, their categories and confidence scores
+- Per-segment: distillation call duration, model used
+- Per-segment: whether the LLM returned an empty list (no learnings)
+- Per-session: total learnings before/after the max_learnings cap
+- Errors: timeouts, parse failures, validation failures (with the invalid data)
+
+**Embedding stage:**
+- Per-learning: text length, embedding duration
+- Batch sizes
+
+**Retrieval stage:**
+- Query text length
+- Number of results before/after similarity filtering
+- Similarity score distribution of results
+- Token budget usage (how full is the context injection)
+- Recency decay impact (how much scores changed)
+
+### Implementation approach
+
+Use Python's `logging` module with a dedicated logger (`crowd_control.telemetry` or similar).
+Log telemetry at `INFO` level as structured key-value pairs so they can be parsed
+programmatically. Normal operational logs (errors, warnings, progress) use the standard
+`crowd_control` logger.
+
+### Configuration
+
+Logging is **off by default**. Most users won't need it and we don't want to create log
+files on their system unprompted.
+
+```toml
+[general]
+# "off" = no logging (default), "file" = log to ~/.crowd-control/logs/
+log_level = "off"
+```
+
+When enabled, logs write to `~/.crowd-control/logs/`. The `log_level` setting controls
+verbosity (`off`, `error`, `warning`, `info`, `debug`). Telemetry data is logged at
+`debug` level so users can enable basic error/warning logging without getting flooded
+with metrics.
+
+Not in scope for MVP — this is a post-v0.1 feature. The initial implementation should use
+Python's `logging` module at key points so the infrastructure is in place. With `log_level`
+defaulting to `off`, no handlers are attached and nothing is written to disk.

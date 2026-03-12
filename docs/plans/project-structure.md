@@ -103,7 +103,7 @@ Default location: `~/.crowd-control/config.toml`
 ```toml
 [general]
 storage_dir = "~/.crowd-control"
-log_level = "info"
+log_level = "off"                      # "off", "error", "warning", "info", "debug"
 
 [knowledge]
 scope = "project"                      # "project", "shared", or "mixed" (v0.2+)

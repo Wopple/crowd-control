@@ -1,6 +1,6 @@
 [general]
 storage_dir = "~/.crowd-control"
-log_level = "info"
+log_level = "off"
 
 [knowledge]
 # "project" = learnings scoped to source project, retrieval filtered by current project
