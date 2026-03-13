@@ -1,15 +1,27 @@
 # Plan: Learning Deduplication
 
+## Status
+
+This plan describes within-session text-based dedup. It has **not been implemented yet**.
+
+Phase 3's embedding-based dedup at storage time is implemented (cosine similarity ≥ 0.95
+threshold in `LearningStore.add()`). This plan covers a complementary lighter-weight step
+that runs during distillation, before embedding.
+
+Note: OpenViking uses LLM-powered deduplication (SKIP/CREATE/MERGE/DELETE decisions)
+which is more sophisticated but requires an async LLM API. We may revisit this if the
+`claude -p` constraint is relaxed. See `openviking-learnings.md` and Decision 12 in
+`decisions.md`.
+
 ## Context
 
 When distilling a session with multiple segments, independent LLM calls can extract
 the same learning from different segments. This produces duplicates in the output.
-The parallel distillation plan (see `parallel-distillation.md`) makes this worse since
-each segment is processed without knowledge of others.
+Parallel distillation makes this worse since each segment is processed without knowledge
+of others.
 
-Phase 3 (`implementation-phases.md`) already plans embedding-based dedup at storage time.
-This plan covers a lighter-weight dedup step that runs immediately after distillation,
-before storage exists.
+This plan covers a text-based dedup step that runs immediately after distillation,
+before the embedding-based storage dedup.
 
 ## Scope
 
@@ -40,13 +52,13 @@ query one per CLAUDE.md), use text-based similarity:
 
 ### Why not embeddings?
 
-- No embedding model is available yet (Phase 3 dependency)
+- This step runs during distillation, before embedding happens in the pipeline
 - Tests cannot call an embedding model (CLAUDE.md rule)
 - `SequenceMatcher` is stdlib, zero dependencies, fast for the volume we handle
   (max ~60 learnings per session = ~1,800 pairs)
 - For within-session dedup, text overlap catches the dominant case (same insight
   extracted from overlapping context). Semantic dedup (different words, same meaning)
-  is better handled at storage time with real embeddings.
+  is already handled at storage time with real embeddings (Phase 3, implemented).
 
 ## Integration point
 

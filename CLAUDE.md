@@ -3,9 +3,9 @@ Keep `structure.md` up-to-date as files are added, removed, and updated.
 Read `README.md` for project goals and background.
 Read all files in `@docs/` (excluding `docs/plans/`) for documentation on what is implemented.
 
-## Direction
+## Status
 
-Do not implement features. Focus on improving code quality and documentation. We are going to find bugs and address architectural weaknesses.
+Pre-release project.
 
 ## Documentation
 

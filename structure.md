@@ -12,9 +12,10 @@ crowd-control/
 │   ├── embedding-and-storage.md  # Embedding providers, LanceDB storage, dedup, pipeline
 │   └── plans/
 │       ├── architecture.md        # Component architecture and data flow
-│       ├── decisions.md           # Design decisions with rationale
-│       ├── implementation-phases.md  # High-level phase overview
-│       ├── phase-3-detailed.md    # Phase 3 detailed plan
+│       ├── decisions.md           # Design decisions with rationale (12 decisions)
+│       ├── implementation-phases.md  # Phase overview (0-3 complete, 4-7 planned)
+│       ├── learning-deduplication.md # Within-session text-based dedup plan
+│       ├── openviking-learnings.md   # Algorithms adopted from OpenViking for Phase 4
 │       └── project-structure.md   # Dependencies, config schema
 ├── src/
 │   └── crowd_control/

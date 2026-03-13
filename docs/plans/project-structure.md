@@ -67,8 +67,9 @@ max_learnings_per_session = 20
 max_results = 15
 max_tokens = 4000
 min_similarity = 0.3               # Minimum cosine similarity to include
-recency_decay = 0.95               # Multiplied per week of age
-project_boost = 1.5                 # Boost for same-project matches
+recency_half_life_days = 7         # Exponential decay half-life (days)
+hotness_weight = 0.2               # Blend: 0.0 = pure semantic, 1.0 = pure hotness
+project_boost = 1.5                # Boost for same-project matches
 
 [ingestion]
 auto_ingest = true                  # Whether Stop hook triggers ingestion

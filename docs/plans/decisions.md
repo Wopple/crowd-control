@@ -345,7 +345,8 @@ Users need control over what gets surfaced.
 max_results = 15              # Maximum number of learnings to retrieve
 max_tokens = 4000             # Token budget for context injection
 min_similarity = 0.3          # Minimum cosine similarity threshold (0.0-1.0)
-recency_decay = 0.95          # Score multiplier per week of age
+recency_half_life_days = 7    # Exponential decay half-life (days)
+hotness_weight = 0.2          # Blend weight: 0.0 = pure semantic, 1.0 = pure hotness
 project_boost = 1.5           # Multiplier for same-project matches
 ```
 
@@ -353,6 +354,17 @@ project_boost = 1.5           # Multiplier for same-project matches
   Without this, a query with no good matches would still return `max_results` irrelevant
   learnings. Default of 0.3 is conservative — users can raise it if they want higher
   precision at the cost of recall.
+
+- **`recency_half_life_days`** controls how fast old learnings decay. At the default
+  of 7, a learning loses half its recency score each week. This replaces the earlier
+  `recency_decay = 0.95` (linear multiplier per week) with exponential decay, which
+  is more principled and gives a single intuitive parameter. Inspired by OpenViking's
+  `memory_lifecycle.py`.
+
+- **`hotness_weight`** controls how much usage frequency (active count) influences
+  ranking vs pure semantic similarity. At 0.2, semantic similarity dominates (80%)
+  but frequently-retrieved learnings get a meaningful boost. Inspired by OpenViking's
+  `hierarchical_retriever.py`.
 
 - All parameters are optional in config. Missing values use defaults defined in code.
 
@@ -610,3 +622,73 @@ with metrics.
 Not in scope for MVP — this is a post-v0.1 feature. The initial implementation should use
 Python's `logging` module at key points so the infrastructure is in place. With `log_level`
 defaulting to `off`, no handlers are attached and nothing is written to disk.
+
+---
+
+## Decision 12: Retrieval scoring inspired by OpenViking
+
+**Recommendation: Adopt OpenViking's hotness scoring and exponential decay, skip its
+LLM-dependent features.**
+
+### Context
+
+OpenViking (github.com/volcengine/OpenViking) is an open-source context database for AI
+agents by ByteDance. After a detailed comparison (see `openviking-learnings.md`), we
+identified specific algorithms worth adopting and others that don't fit our constraints.
+
+### What we adopt
+
+**1. Hotness scoring** — OpenViking tracks `active_count` (how often each context record
+is retrieved) and combines it with recency into a single score:
+
+```
+hotness = sigmoid(log1p(active_count)) * exp(-ln(2) / half_life_days * age_days)
+```
+
+This is better than pure recency decay because a frequently-used learning from 2 weeks
+ago should rank higher than a never-used learning from yesterday. The `sigmoid(log1p(...))`
+compression prevents a small number of heavily-used learnings from dominating.
+
+**2. Score blending** — Final ranking blends semantic similarity with hotness:
+
+```
+final = (1 - hotness_weight) * semantic + hotness_weight * hotness
+```
+
+With `hotness_weight = 0.2`, semantic similarity dominates but usage signals matter.
+
+**3. Exponential recency decay** — `exp(-ln(2) / half_life * age)` with a 7-day half-life
+replaces the earlier `0.95^weeks` linear multiplier. Advantages: more principled, faster
+decay for stale learnings, single intuitive parameter.
+
+### What we skip (and why)
+
+| Feature | Why not |
+|---|---|
+| L0/L1/L2 hierarchy | Requires LLM API for summary generation |
+| LLM-powered deduplication | Requires async LLM API; cosine 0.95 sufficient at current scale |
+| Intent analysis | Requires LLM API; query string + project filtering sufficient |
+| Hierarchical directory retrieval | Depends on L0/L1/L2 existing |
+| Virtual filesystem (AGFS) | Massive complexity for flat-learning case |
+
+### Why not adopt OpenViking as a platform
+
+OpenViking is a multi-tenant platform designed for teams building agent products. Using
+it as a backend for Crowd Control would require:
+
+- A separate LLM API key (OpenViking's memory extraction, dedup, intent analysis, and
+  L0/L1 generation all need an async LLM client — incompatible with our `claude -p` approach)
+- Running a Go subprocess (AGFS) for its virtual filesystem
+- ~1000+ lines of adapter code for Claude Code integration
+- Accepting that most platform improvements (multi-tenancy, chat channels, bot framework)
+  would be irrelevant to our use case
+
+The algorithms are valuable; the platform coupling is not. See `openviking-learnings.md`
+for the full comparison.
+
+### Implementation impact
+
+- Add `active_count: int` to `Learning` model and LanceDB schema
+- Implement scoring formulas in `retrieve/rank.py`
+- Replace `recency_decay` config with `recency_half_life_days` and `hotness_weight`
+- Increment active counts in MCP search tool and hook context injection

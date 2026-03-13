@@ -65,10 +65,16 @@ Session JSONL file (~/.claude/projects/*/session.jsonl)
 ```
 New prompt + project context
   → Embed query
-  → Vector search in LanceDB (filtered by project, recency)
-  → Rank by relevance + recency decay
+  → Vector search in LanceDB (filtered by project, category, stale)
+  → Compute per-result score:
+      recency   = exp(-ln(2) / half_life_days * age_days)
+      hotness   = sigmoid(log1p(active_count)) * recency
+      final     = (1 - hotness_weight) * semantic + hotness_weight * hotness
+  → Apply project boost for same-project matches
+  → Deduplicate by text similarity
   → Pack into token budget
   → Inject as context (via hook stdout or MCP resource)
+  → Increment active_count for returned learnings
 ```
 
 ## Integration Points with Claude Code
@@ -197,5 +203,6 @@ Each learning stored in LanceDB:
 | git_sha     | string     | Git SHA at time of learning (if available)     |
 | timestamp   | datetime   | When the learning was extracted                |
 | confidence  | float      | How significant/reliable the learning is       |
+| active_count| int        | Times retrieved in search results (feeds hotness scoring) |
 | stale       | bool       | Whether the learning has been marked stale     |
 | shared      | bool       | Universal learning visible to all projects (mixed scope only) |

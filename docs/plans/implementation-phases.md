@@ -1,68 +1,75 @@
 # Crowd Control - Implementation Phases
 
-## Phase 0: Project scaffolding
+## Phase 0: Project scaffolding ✅
 
-- Initialize `pyproject.toml` with metadata, dependencies, entry points
-- Create package structure under `src/crowd_control/`
-- Set up `ruff` for linting/formatting
-- Set up `pytest` with basic conftest
-- Create default config template
+Complete. Package structure, `pyproject.toml`, ruff, pytest, default config template.
 
-**Deliverable:** Installable package with `crowd-control --help` working.
+## Phase 1: Session parsing and data models ✅
 
-## Phase 1: Session parsing and data models
+Complete. See `docs/distillation.md` for parsing details. Models in `storage/models.py`.
 
-- Define `Learning` and `Session` pydantic models
-- Parse Claude Code JSONL session transcripts into structured message lists
-- Handle the various message types (user, assistant, tool_use, tool_result)
-- Segment conversations into logical chunks (by tool call boundaries or topic shifts)
-- Write tests with sample session fixtures
+## Phase 2: Distillation pipeline ✅
 
-**Deliverable:** `crowd-control ingest --dry-run <path>` shows parsed session structure.
+Complete. See `docs/distillation.md`. Prompt construction, `claude -p` invocation,
+retry policy, parallel segment processing, confidence-based capping.
 
-## Phase 2: Distillation pipeline
+## Phase 3: Embedding and storage ✅
 
-- Implement the distillation prompt (extract learnings from session segments)
-- Call Claude Code CLI (`claude -p`) with `--json-schema` for structured extraction
-- Parse structured output into `Learning` objects with robust JSON extraction
-- Handle subprocess errors, timeouts, and retries (with backoff)
-- Add category classification and tag extraction
-- Exclude thinking blocks from distillation input (only distill outcomes)
-- Add `include_thinking` parameter to `ConversationSegment.to_prompt_text()`
-- Write tests with mocked subprocess responses
+Complete. See `docs/embedding-and-storage.md`. Three embedding providers (Ollama,
+Voyage, OpenAI), LanceDB storage with two-stage dedup, full ingestion pipeline.
 
-**Deliverable:** `crowd-control ingest <path>` prints extracted learnings to stdout with progress.
+## Unscheduled: Within-session dedup
 
-## Phase 3: Embedding and storage
-
-- Implement `Embedder` protocol and Ollama provider
-- Connect to LanceDB and create the learnings table schema
-- Embed learnings and insert into LanceDB
-- Implement basic CRUD operations (list, get, delete)
-- Deduplicate learnings at storage time:
-  - Reject exact-duplicate text (same learning text already in the DB)
-  - Reject near-duplicates by embedding similarity (learnings within a small cosine distance of an existing learning). Threshold TBD — needs experimentation, but ~0.95 similarity is a starting point.
-  - This prevents re-ingesting the same session from creating duplicate entries
-- Add Voyage and OpenAI embedding providers
-- Write tests with in-memory or temp-dir LanceDB
-
-**Deliverable:** Full ingestion pipeline works end-to-end. Learnings stored and queryable. Duplicate learnings are rejected.
+Text-based deduplication in `distill_session` (see `learning-deduplication.md`).
+Independent of Phase 4 — a refinement to the distillation pipeline.
 
 ## Phase 4: Retrieval and ranking
 
-- Implement vector search with metadata filtering
-- Add recency decay to ranking scores
-- Add project-affinity boosting
-- Implement deduplication (by text similarity)
-- Implement token budget packing
-- Write tests with known queries against seeded data
+The retrieval and ranking system, informed by algorithms from OpenViking
+(see `openviking-learnings.md` for rationale and source references).
 
-**Deliverable:** `crowd-control search "how does the auth system work"` returns ranked results.
+### Data model changes
+
+- Add `active_count: int = 0` to `Learning` model and LanceDB schema
+- Add `LearningStore.increment_active_count(learning_id)` method
+
+### Search (`retrieve/search.py`)
+
+- Embed query text via configured embedder
+- LanceDB vector search with cosine distance
+- Metadata filters: project, category, tags, stale
+- Minimum similarity threshold from config
+- Return raw results with similarity scores
+
+### Ranking (`retrieve/rank.py`)
+
+Scoring formula (from OpenViking's `memory_lifecycle.py`):
+
+- Recency: `exp(-ln(2) / half_life_days * age_days)` (half-life default 7 days)
+- Hotness: `sigmoid(log1p(active_count)) * recency_factor`
+- Final: `(1 - hotness_weight) * semantic_score + hotness_weight * hotness_score`
+- Apply project boost for same-project matches
+- Deduplicate by text similarity (post-search pass)
+- Pack into token budget
+
+### Config changes
+
+Replace `recency_decay = 0.95` with:
+- `recency_half_life_days = 7` — exponential decay half-life
+- `hotness_weight = 0.2` — blend weight for hotness vs semantic similarity
+
+### Active count tracking
+
+Increment `active_count` when learnings are returned by search (MCP tool or hook
+injection). This creates the feedback loop that makes hotness scoring meaningful.
+
+**Deliverable:** `crowd-control search "how does the auth system work"` returns ranked
+results. Frequently-retrieved learnings rise in ranking over time.
 
 ## Phase 5: MCP server
 
 - Define MCP server with FastMCP
-- Implement `search_learnings` tool
+- Implement `search_learnings` tool (calls retrieval pipeline, increments active counts)
 - Implement `add_learning` tool
 - Implement `ingest_session` tool
 - Implement `status` tool
@@ -74,7 +81,7 @@
 ## Phase 6: Hooks and automation
 
 - Implement `Stop` hook handler (queue ingestion job)
-- Implement `SessionStart` hook handler (retrieve + format context)
+- Implement `SessionStart` hook handler (retrieve + format context, increment active counts)
 - Implement `crowd-control setup` command (auto-configure hooks + MCP)
 - Add background worker for processing ingestion queue
 - Write tests for hook I/O format
