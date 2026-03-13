@@ -88,22 +88,25 @@ def _load_fixture_response():
 
 class TestBuildPrompt:
     def test_project_path(self):
-        session = _make_session(project_path="/my/project")
         segment = _make_segment()
-        prompt = build_distillation_prompt(segment, session, max_learning_chars=2000)
+        prompt = build_distillation_prompt(
+            segment, project_path="/my/project", git_branch="main", max_learning_chars=2000
+        )
         assert "Project: /my/project" in prompt
 
     def test_segment_text(self):
         segment = _make_segment()
-        session = _make_session()
-        prompt = build_distillation_prompt(segment, session, max_learning_chars=2000)
+        prompt = build_distillation_prompt(
+            segment, project_path="/test/project", git_branch="main", max_learning_chars=2000
+        )
         assert "Fix the database connection pooling issue" in prompt
         assert "pool size was hardcoded" in prompt
 
-    def test_none_branch(self):
-        session = _make_session(git_branch=None)
+    def test_git_branch(self):
         segment = _make_segment()
-        prompt = build_distillation_prompt(segment, session, max_learning_chars=2000)
+        prompt = build_distillation_prompt(
+            segment, project_path="/test", git_branch="unknown", max_learning_chars=2000
+        )
         assert "Git branch: unknown" in prompt
 
     def test_truncation(self):
@@ -123,21 +126,24 @@ class TestBuildPrompt:
             ),
         ]
         segment = _make_segment(messages=messages)
-        session = _make_session(segments=[segment])
-        prompt = build_distillation_prompt(segment, session, max_learning_chars=2000)
+        prompt = build_distillation_prompt(
+            segment, project_path="/test", git_branch="main", max_learning_chars=2000
+        )
         assert "...[segment truncated]..." in prompt
 
     def test_max_learning_chars(self):
         segment = _make_segment()
-        session = _make_session()
-        prompt = build_distillation_prompt(segment, session, max_learning_chars=500)
+        prompt = build_distillation_prompt(
+            segment, project_path="/test", git_branch="main", max_learning_chars=500
+        )
         assert "under 500 characters" in prompt
 
     def test_multiple_learnings(self):
         """Prompt should instruct extraction of multiple learnings."""
         segment = _make_segment()
-        session = _make_session()
-        prompt = build_distillation_prompt(segment, session, max_learning_chars=2000)
+        prompt = build_distillation_prompt(
+            segment, project_path="/test", git_branch="main", max_learning_chars=2000
+        )
         assert "Extract as many" in prompt
 
     def test_excludes_thinking(self):
@@ -159,18 +165,11 @@ class TestBuildPrompt:
             ),
         ]
         segment = _make_segment(messages=messages)
-        session = _make_session(segments=[segment])
-        prompt = build_distillation_prompt(segment, session, max_learning_chars=2000)
+        prompt = build_distillation_prompt(
+            segment, project_path="/test", git_branch="main", max_learning_chars=2000
+        )
         assert "secret internal reasoning" not in prompt
         assert "I'll fix it." in prompt
-
-    def test_empty_project_path_falls_back_to_cwd(self):
-        session = _make_session(project_path="")
-        segment = _make_segment()
-        prompt = build_distillation_prompt(segment, session, max_learning_chars=2000)
-        # Should contain the CWD, not empty string
-        assert "Project: " in prompt
-        assert "Project: \n" not in prompt
 
 
 class TestExtractJson:
@@ -422,6 +421,30 @@ class TestDistillSegment:
 
         assert learnings == []
         mock_call.assert_not_called()
+
+    @patch.dict("os.environ", {}, clear=True)
+    @patch("crowd_control.ingest.distiller._get_git_sha", return_value=None)
+    @patch("crowd_control.ingest.distiller.call_claude")
+    def test_empty_project_path_uses_cwd(self, mock_call, mock_sha):
+        """When session.project_path is empty, distill_segment falls back to cwd."""
+        mock_call.return_value = {
+            "learnings": [
+                {
+                    "text": "A learning",
+                    "category": "gotcha",
+                    "tags": [],
+                    "confidence": 0.7,
+                }
+            ]
+        }
+
+        session = _make_session(project_path="")
+        segment = _make_segment()
+        learnings = distill_segment(segment, session)
+
+        assert len(learnings) == 1
+        assert learnings[0].project != ""
+        assert learnings[0].project == str(Path.cwd())
 
 
 class TestDistillSession:

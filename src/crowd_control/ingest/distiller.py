@@ -158,15 +158,17 @@ def truncate_segment_text(text: str, max_chars: int = 30000) -> str:
 
 def build_distillation_prompt(
     segment: ConversationSegment,
-    session: Session,
+    project_path: str,
+    git_branch: str,
     max_learning_chars: int,
 ) -> str:
     """Build the distillation prompt for a segment.
 
+    Accepts already-resolved project_path and git_branch — callers are responsible
+    for fallback logic (e.g. defaulting empty project_path to cwd).
+
     Returns empty string if segment text is too short (< 50 chars after truncation).
     """
-    project_path = session.project_path if session.project_path else str(Path.cwd())
-    git_branch = session.git_branch or "unknown"
     segment_text = segment.to_prompt_text(include_thinking=False)
     segment_text = truncate_segment_text(segment_text)
 
@@ -300,8 +302,9 @@ def distill_segment(
     Returns a list of Learning objects extracted by the LLM.
     """
     project_path = session.project_path if session.project_path else str(Path.cwd())
+    git_branch = session.git_branch or "unknown"
 
-    prompt = build_distillation_prompt(segment, session, max_learning_chars)
+    prompt = build_distillation_prompt(segment, project_path, git_branch, max_learning_chars)
     if not prompt:
         return []
 
