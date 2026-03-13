@@ -125,28 +125,6 @@ class DistillationError(Exception):
     """Raised when distillation fails."""
 
 
-def _extract_json(raw: str) -> dict:
-    """Extract the first valid JSON object from raw output.
-
-    Tries up to 4 positions starting from the first '{' character.
-    Uses raw_decode to handle trailing non-JSON content.
-    """
-    decoder = json.JSONDecoder()
-    pos = 0
-    attempts = 0
-    while attempts < 4:
-        idx = raw.find("{", pos)
-        if idx == -1:
-            break
-        try:
-            obj, _ = decoder.raw_decode(raw, idx)
-            return obj
-        except json.JSONDecodeError:
-            pos = idx + 1
-            attempts += 1
-
-    raise DistillationError(f"Could not extract valid JSON from output (length={len(raw)})")
-
 
 def truncate_segment_text(text: str, max_chars: int = 30000) -> str:
     """Truncate segment text if it exceeds max_chars, keeping head and tail."""
@@ -257,10 +235,13 @@ def call_claude(
             raise last_error
 
         # Parse output — JSON parse failure is non-retryable
+        logger.debug("claude CLI returned %d bytes of output", len(result.stdout))
         try:
-            parsed = _extract_json(result.stdout)
-        except DistillationError:
-            raise
+            parsed = json.loads(result.stdout)
+        except json.JSONDecodeError as e:
+            raise DistillationError(
+                f"claude CLI returned invalid JSON (length={len(result.stdout)}): {e}"
+            ) from e
 
         # Extract structured_output — missing is non-retryable
         if "structured_output" not in parsed:

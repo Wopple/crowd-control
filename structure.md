@@ -13,6 +13,7 @@ crowd-control/
 │       ├── architecture.md        # Component architecture and data flow
 │       ├── code-quality-fixes.md  # 5 targeted code quality improvements
 │       ├── code-quality-phase-1.md # Detailed plan: deduplicate project path fallback
+│       ├── code-quality-phase-2.md # Detailed plan: remove JSON extraction heuristics
 │       ├── decisions.md           # Design decisions with rationale
 │       ├── implementation-phases.md  # High-level phase overview
 │       ├── phase-2-distillation.md       # Detailed Phase 2 steps

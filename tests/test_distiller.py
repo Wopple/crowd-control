@@ -11,7 +11,6 @@ import pytest
 from crowd_control.ingest.distiller import (
     LEARNING_EXTRACTION_SCHEMA,
     DistillationError,
-    _extract_json,
     _get_git_sha,
     build_distillation_prompt,
     call_claude,
@@ -172,34 +171,6 @@ class TestBuildPrompt:
         assert "I'll fix it." in prompt
 
 
-class TestExtractJson:
-    def test_clean_json(self):
-        raw = '{"learnings": []}'
-        result = _extract_json(raw)
-        assert result == {"learnings": []}
-
-    def test_json_with_prefix(self):
-        raw = 'Some text before {"learnings": [{"text": "hi"}]}'
-        result = _extract_json(raw)
-        assert result["learnings"][0]["text"] == "hi"
-
-    def test_json_with_multiple_braces(self):
-        raw = 'prefix {invalid json} {"learnings": []}'
-        result = _extract_json(raw)
-        assert result == {"learnings": []}
-
-    def test_no_valid_json(self):
-        raw = "this has no valid json at all"
-        with pytest.raises(DistillationError):
-            _extract_json(raw)
-
-    def test_json_with_trailing_content(self):
-        """Bug: json.loads fails if there's non-whitespace after the JSON object."""
-        raw = '{"learnings": []}\nSome debug output'
-        result = _extract_json(raw)
-        assert result == {"learnings": []}
-
-
 class TestCallClaude:
     def _mock_result(self, stdout="", returncode=0, stderr=""):
         mock = MagicMock()
@@ -253,7 +224,7 @@ class TestCallClaude:
     def test_invalid_json_output(self, mock_run):
         mock_run.return_value = self._mock_result(stdout="not json at all")
 
-        with pytest.raises(DistillationError, match="Could not extract valid JSON"):
+        with pytest.raises(DistillationError, match="claude CLI returned invalid JSON"):
             call_claude("test prompt", LEARNING_EXTRACTION_SCHEMA)
         # Non-retryable, so only 1 attempt
         assert mock_run.call_count == 1
