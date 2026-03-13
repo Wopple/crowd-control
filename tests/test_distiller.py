@@ -12,6 +12,7 @@ from crowd_control.ingest.distiller import (
     LEARNING_EXTRACTION_SCHEMA,
     DistillationError,
     _extract_json,
+    _get_git_sha,
     build_distillation_prompt,
     call_claude,
     distill_segment,
@@ -193,6 +194,12 @@ class TestExtractJson:
         with pytest.raises(DistillationError):
             _extract_json(raw)
 
+    def test_json_with_trailing_content(self):
+        """Bug: json.loads fails if there's non-whitespace after the JSON object."""
+        raw = '{"learnings": []}\nSome debug output'
+        result = _extract_json(raw)
+        assert result == {"learnings": []}
+
 
 class TestCallClaude:
     def _mock_result(self, stdout="", returncode=0, stderr=""):
@@ -293,6 +300,13 @@ class TestCallClaude:
             call_claude("test prompt", LEARNING_EXTRACTION_SCHEMA)
         assert mock_run.call_count == 3
         assert mock_sleep.call_count == 2
+
+
+class TestGetGitSha:
+    def test_empty_project_path_returns_none(self):
+        """Bug: _get_git_sha('') passes cwd='' to subprocess — undefined behavior."""
+        result = _get_git_sha("")
+        assert result is None
 
 
 class TestDistillSegment:

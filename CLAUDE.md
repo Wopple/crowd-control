@@ -3,6 +3,10 @@ Keep `structure.md` up-to-date as files are added, removed, and updated.
 Read `README.md` for project goals and background.
 Read all files in `@docs/` (excluding `docs/plans/`) for documentation on what is implemented.
 
+## Direction
+
+Do not implement features. Focus on improving code quality and documentation. We are going to find bugs and address architectural weaknesses.
+
 ## Documentation
 
 There are two kinds of docs in this project:
@@ -33,6 +37,13 @@ uv run ruff check    # Lint
 uv run ruff format   # Format
 uv run crowd-control --help   # Run the CLI
 ```
+
+## Big Fixing
+
+1. Write the test that fails due to the bug.
+2. Run the test to confirm it fails.
+3. Fix the bug.
+4. Run the test again to confirm it passes.
 
 ## Tests
 

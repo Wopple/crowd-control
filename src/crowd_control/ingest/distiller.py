@@ -92,10 +92,24 @@ Categories:
 
 Do NOT extract:
 - Generic programming knowledge (e.g., "use is instead of == for None comparison")
+- General knowledge about tools, frameworks, or build systems (e.g., "uv uses \
+dependency-groups for dev deps", "pytest discovers tests in test_ files")
 - File contents or raw error logs
 - Exploratory dead ends that produced no insight
 - Information that's obvious from reading the code itself
 - Anything already well-known about the language or framework
+- Rejected alternatives — if the transcript discusses multiple options and picks one, \
+only extract the chosen approach, not the ones that were considered and discarded
+
+Confidence scoring — use the FULL range, not just high values:
+- 1.0: a hard-won insight that would be very costly to rediscover (e.g., a subtle bug \
+root cause, a non-obvious integration requirement)
+- 0.8: a solid architectural decision or useful pattern with clear rationale
+- 0.5: a useful convention or practice that saves some time but isn't critical
+- 0.3: a minor observation that might be useful in narrow circumstances
+- 0.1: barely worth recording
+Most learnings should fall between 0.4 and 0.8. If you find yourself giving everything \
+the same score, you are not discriminating enough.
 
 If the segment contains no learnings worth extracting, return an empty list.
 
@@ -115,7 +129,9 @@ def _extract_json(raw: str) -> dict:
     """Extract the first valid JSON object from raw output.
 
     Tries up to 4 positions starting from the first '{' character.
+    Uses raw_decode to handle trailing non-JSON content.
     """
+    decoder = json.JSONDecoder()
     pos = 0
     attempts = 0
     while attempts < 4:
@@ -123,7 +139,8 @@ def _extract_json(raw: str) -> dict:
         if idx == -1:
             break
         try:
-            return json.loads(raw[idx:])
+            obj, _ = decoder.raw_decode(raw, idx)
+            return obj
         except json.JSONDecodeError:
             pos = idx + 1
             attempts += 1
@@ -255,6 +272,8 @@ def call_claude(
 
 def _get_git_sha(project_path: str) -> str | None:
     """Get the current git HEAD SHA for a project path."""
+    if not project_path:
+        return None
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],

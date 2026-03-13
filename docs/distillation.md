@@ -25,6 +25,10 @@ Before distillation, `distill_session` filters out trivial segments:
 - Instructions for the LLM about what constitutes a good learning
 - The six learning categories (architecture_decision, debugging_insight, pattern_discovery,
   tool_usage, codebase_convention, gotcha)
+- Explicit negative instructions: no generic knowledge, no tool/framework general knowledge,
+  no rejected alternatives (only adopted decisions), no file contents or raw logs
+- Confidence calibration guidance with examples at each level (1.0 through 0.1), pushing the
+  LLM to use the full range rather than clustering all scores at the top
 - Project path and git branch as context
 - The segment transcript, rendered via `ConversationSegment.to_prompt_text(include_thinking=False)`
 

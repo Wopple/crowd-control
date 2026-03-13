@@ -33,7 +33,7 @@ def parse_session_file(path: Path) -> Session:
     """Parse a Claude Code session JSONL file into a Session object."""
     path = Path(path).expanduser().resolve()
     raw_lines: list[dict] = []
-    for lineno, line in enumerate(path.open(), start=1):
+    for lineno, line in enumerate(path.open(encoding="utf-8"), start=1):
         line = line.strip()
         if not line:
             continue
@@ -71,7 +71,7 @@ def parse_session_file(path: Path) -> Session:
         segments=segments,
         start_time=start,
         end_time=end,
-        message_count=len(raw_lines),
+        message_count=len(messages),
         model=first_model,
     )
 
@@ -254,7 +254,7 @@ def _parse_user_content(content_raw) -> list[ContentBlock]:
                 if text.strip():
                     blocks.append(TextBlock(text=text))
             elif block_type == "tool_result":
-                raw_content = str(item.get("content", ""))
+                raw_content = _extract_tool_result_content(item.get("content", ""))
                 blocks.append(_make_tool_result_block(
                     tool_use_id=item.get("tool_use_id", ""),
                     content=raw_content,
@@ -285,6 +285,20 @@ def _parse_assistant_content(content_raw: list) -> list[ContentBlock]:
             thinking_text = item.get("thinking", "")
             blocks.append(ThinkingBlock(thinking=thinking_text))
     return blocks
+
+
+def _extract_tool_result_content(content) -> str:
+    """Extract text from tool_result content, which can be a string or a list of blocks."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                parts.append(part.get("text", ""))
+        if parts:
+            return "\n".join(parts)
+    return str(content)
 
 
 def _make_tool_result_block(tool_use_id: str, content: str) -> ToolResultBlock:

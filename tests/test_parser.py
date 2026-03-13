@@ -31,8 +31,10 @@ class TestParseSessionFile:
         assert session.git_branch == "main"
         assert session.model == "claude-sonnet-4-6"
         assert session.claude_version == "2.1.72"
-        # 15 lines total in fixture
-        assert session.message_count == 15
+        # message_count should reflect parsed messages, not raw JSONL lines.
+        # The fixture has 15 raw lines but some are noise (file-history-snapshot,
+        # progress, turn_duration) that never become Message objects.
+        assert session.message_count < 15  # Bug: was counting raw lines
         # Should produce 2 segments (messages 4-9 and 12-15 from plan)
         assert len(session.segments) == 2
 
@@ -56,8 +58,8 @@ class TestParseSessionFile:
         assert session.session_id == "minimal-session-001"
         assert session.project_path == "/Users/test/minimal"
         assert session.git_branch == "dev"
-        # 3 lines, turn_duration filtered -> 2 messages -> 1 segment
-        assert session.message_count == 3
+        # 3 raw lines, but turn_duration is filtered -> 2 parsed messages -> 1 segment
+        assert session.message_count == 2
         assert len(session.segments) == 1
 
     def test_compact_session(self):
@@ -201,6 +203,65 @@ class TestParseMessage:
         assert parse_message(raw) is None
 
 
+class TestToolResultListContent:
+    """Bug: tool_result content can be a list of content blocks (MCP tools), not just a string."""
+
+    def test_list_content_extracts_text(self):
+        """When tool_result content is a list of text blocks, extract the text."""
+        raw = {
+            "type": "user",
+            "message": {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "t1",
+                        "content": [
+                            {"type": "text", "text": "First paragraph of results."},
+                            {"type": "text", "text": "Second paragraph of results."},
+                        ],
+                    },
+                ],
+            },
+            "uuid": "u1",
+            "timestamp": "2026-03-11T19:00:00.000Z",
+            "isMeta": False,
+        }
+        msg = parse_message(raw)
+        block = msg.content[0]
+        assert isinstance(block, ToolResultBlock)
+        # Should contain the actual text, NOT Python repr like "[{'type': 'text', ..."
+        assert "First paragraph" in block.content
+        assert "Second paragraph" in block.content
+        assert "{'type'" not in block.content
+
+    def test_list_content_with_non_text_blocks(self):
+        """List content with non-text blocks (e.g., tool_reference) should not crash."""
+        raw = {
+            "type": "user",
+            "message": {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "t1",
+                        "content": [
+                            {"type": "tool_reference", "tool_name": "some_tool"},
+                            {"type": "text", "text": "Actual result text here."},
+                        ],
+                    },
+                ],
+            },
+            "uuid": "u1",
+            "timestamp": "2026-03-11T19:00:00.000Z",
+            "isMeta": False,
+        }
+        msg = parse_message(raw)
+        block = msg.content[0]
+        assert isinstance(block, ToolResultBlock)
+        assert "Actual result text here." in block.content
+
+
 class TestToolResultTruncation:
     def test_short_content_not_truncated(self):
         raw = {
@@ -311,6 +372,43 @@ class TestSegmentation:
 
     def test_empty_messages(self):
         assert segment_messages([]) == []
+
+
+class TestFileEncoding:
+    def test_utf8_content_parsed_correctly(self, tmp_path):
+        """Bug: parser opens files without encoding='utf-8'. Verify UTF-8 content works."""
+        session_file = tmp_path / "utf8_session.jsonl"
+        import json
+
+        lines = [
+            json.dumps(
+                {
+                    "type": "user",
+                    "message": {"role": "user", "content": "Fix the café module — it's broken"},
+                    "uuid": "u1",
+                    "timestamp": "2026-03-11T19:00:00.000Z",
+                    "isMeta": False,
+                    "sessionId": "utf8-test",
+                    "cwd": "/test",
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "role": "assistant",
+                        "model": "claude-sonnet-4-6",
+                        "content": [{"type": "text", "text": "I'll fix the café module."}],
+                    },
+                    "uuid": "a1",
+                    "timestamp": "2026-03-11T19:00:10.000Z",
+                }
+            ),
+        ]
+        session_file.write_text("\n".join(lines), encoding="utf-8")
+        session = parse_session_file(session_file)
+        seg_text = session.segments[0].to_prompt_text()
+        assert "café" in seg_text
 
 
 class TestEncodeProjectPath:

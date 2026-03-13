@@ -47,11 +47,12 @@ def ingest(path, dry_run):
         return
 
     # Full ingestion: parse + distill
-    qualifying = [s for s in session.segments if len(s.messages) >= 2]
-    click.echo(f"Session {session.session_id}: {len(qualifying)} segments to distill")
+    click.echo(f"Session {session.session_id}: {len(session.segments)} segments")
 
     def _progress(i: int, total: int) -> None:
-        click.echo(f"  Distilling segment {i + 1}/{total}...")
+        if i == 0:
+            click.echo(f"Distilling {total} qualifying segments...")
+        click.echo(f"  Segment {i + 1}/{total}...")
 
     try:
         learnings = distill_session(session, progress_callback=_progress)
