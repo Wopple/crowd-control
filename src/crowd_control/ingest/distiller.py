@@ -14,6 +14,7 @@ from crowd_control.storage.models import (
     ConversationSegment,
     Learning,
     LearningCategory,
+    MessageRole,
     Session,
     ThinkingBlock,
 )
@@ -313,6 +314,28 @@ def distill_segment(
     return learnings
 
 
+def is_segment_worth_distilling(segment: ConversationSegment) -> bool:
+    """Check whether a segment has enough content to be worth distilling.
+
+    Rejects segments that:
+    - Have fewer than 2 messages
+    - Contain no assistant messages
+    - Have only empty thinking blocks as assistant content
+    """
+    if len(segment.messages) < 2:
+        return False
+
+    assistant_msgs = [m for m in segment.messages if m.role == MessageRole.ASSISTANT]
+    if not assistant_msgs:
+        return False
+
+    for msg in assistant_msgs:
+        for block in msg.content:
+            if not isinstance(block, ThinkingBlock) or block.thinking:
+                return True
+    return False
+
+
 def distill_session(
     session: Session,
     model: str = "haiku",
@@ -325,35 +348,9 @@ def distill_session(
     Filters out trivial segments (too few messages, no assistant content).
     Caps results at max_learnings by confidence descending (preserving order for ties).
     """
-    qualifying_segments: list[ConversationSegment] = []
-    for seg in session.segments:
-        # Skip if fewer than 2 messages
-        if len(seg.messages) < 2:
-            continue
-
-        # Skip if no assistant messages
-        has_assistant = any(m.role.value == "assistant" for m in seg.messages)
-        if not has_assistant:
-            continue
-
-        # Skip if all assistant content is empty thinking blocks
-        all_empty_thinking = True
-        for msg in seg.messages:
-            if msg.role.value != "assistant":
-                continue
-            for block in msg.content:
-                if not isinstance(block, ThinkingBlock):
-                    all_empty_thinking = False
-                    break
-                elif block.thinking:
-                    all_empty_thinking = False
-                    break
-            if not all_empty_thinking:
-                break
-        if all_empty_thinking:
-            continue
-
-        qualifying_segments.append(seg)
+    qualifying_segments = [
+        seg for seg in session.segments if is_segment_worth_distilling(seg)
+    ]
 
     total = len(qualifying_segments)
     all_learnings: list[Learning] = []

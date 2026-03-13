@@ -11,7 +11,6 @@ crowd-control/
 │   ├── distillation.md           # How the distillation pipeline works
 │   └── plans/
 │       ├── architecture.md        # Component architecture and data flow
-│       ├── code-quality-fixes.md  # 5 targeted code quality improvements
 │       ├── decisions.md           # Design decisions with rationale
 │       ├── implementation-phases.md  # High-level phase overview
 │       ├── phase-2-distillation.md       # Detailed Phase 2 steps

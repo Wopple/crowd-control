@@ -16,6 +16,7 @@ from crowd_control.ingest.distiller import (
     call_claude,
     distill_segment,
     distill_session,
+    is_segment_worth_distilling,
 )
 from crowd_control.storage.models import (
     ConversationSegment,
@@ -447,10 +448,10 @@ class TestDistillSegment:
         assert learnings[0].text == "Valid short learning"
 
 
-class TestDistillSession:
-    def _make_trivial_segment(self):
-        """A segment with only 1 message — should be skipped."""
-        return ConversationSegment(
+class TestIsSegmentWorthDistilling:
+    def test_too_few_messages(self):
+        """Single-message segment is not worth distilling."""
+        seg = ConversationSegment(
             messages=[
                 Message(
                     role=MessageRole.USER,
@@ -463,10 +464,11 @@ class TestDistillSession:
             start_time=_ts(),
             end_time=_ts(),
         )
+        assert is_segment_worth_distilling(seg) is False
 
-    def _make_no_assistant_segment(self):
-        """A segment with 2 user messages but no assistant — should be skipped."""
-        return ConversationSegment(
+    def test_no_assistant_messages(self):
+        """Segment with only user messages is not worth distilling."""
+        seg = ConversationSegment(
             messages=[
                 Message(
                     role=MessageRole.USER,
@@ -485,10 +487,11 @@ class TestDistillSession:
             start_time=_ts(),
             end_time=_ts(),
         )
+        assert is_segment_worth_distilling(seg) is False
 
-    def _make_empty_thinking_segment(self):
-        """A segment where all assistant content is empty thinking blocks."""
-        return ConversationSegment(
+    def test_all_empty_thinking(self):
+        """Segment where all assistant content is empty thinking blocks is not worth distilling."""
+        seg = ConversationSegment(
             messages=[
                 Message(
                     role=MessageRole.USER,
@@ -507,22 +510,38 @@ class TestDistillSession:
             start_time=_ts(),
             end_time=_ts(),
         )
+        assert is_segment_worth_distilling(seg) is False
 
-    @patch.dict("os.environ", {}, clear=True)
-    @patch("crowd_control.ingest.distiller.distill_segment")
-    def test_skips_trivial_segments(self, mock_distill):
-        mock_distill.return_value = []
+    def test_non_empty_thinking_qualifies(self):
+        """Assistant with non-empty thinking content qualifies."""
+        seg = ConversationSegment(
+            messages=[
+                Message(
+                    role=MessageRole.USER,
+                    content=[TextBlock(text="hello")],
+                    uuid="u1",
+                    timestamp=_ts(),
+                ),
+                Message(
+                    role=MessageRole.ASSISTANT,
+                    content=[ThinkingBlock(thinking="actual thought")],
+                    uuid="a1",
+                    timestamp=_ts(),
+                ),
+            ],
+            tool_names=[],
+            start_time=_ts(),
+            end_time=_ts(),
+        )
+        assert is_segment_worth_distilling(seg) is True
 
-        trivial = self._make_trivial_segment()
-        no_assistant = self._make_no_assistant_segment()
-        empty_thinking = self._make_empty_thinking_segment()
-        good = _make_segment()
+    def test_normal_segment_qualifies(self):
+        """Standard user + assistant with text qualifies."""
+        seg = _make_segment()
+        assert is_segment_worth_distilling(seg) is True
 
-        session = _make_session(segments=[trivial, no_assistant, empty_thinking, good])
-        distill_session(session)
 
-        # Only the good segment should be distilled
-        assert mock_distill.call_count == 1
+class TestDistillSession:
 
     @patch.dict("os.environ", {}, clear=True)
     @patch("crowd_control.ingest.distiller.distill_segment")
