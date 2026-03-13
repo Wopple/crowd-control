@@ -589,7 +589,6 @@ class TestIsSegmentWorthDistilling:
 
 
 class TestDistillSession:
-
     @patch.dict("os.environ", {}, clear=True)
     @patch("crowd_control.ingest.distiller._get_git_sha", return_value=None)
     @patch("crowd_control.ingest.distiller.distill_segment")
@@ -698,6 +697,7 @@ class TestDistillSession:
     @patch("crowd_control.ingest.distiller.distill_segment")
     def test_parallel_results_ordered_by_segment(self, mock_distill, mock_sha):
         """Learnings appear in original segment order regardless of completion order."""
+
         def make_learning(text):
             return Learning(
                 text=text,

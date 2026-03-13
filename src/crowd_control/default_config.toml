@@ -21,7 +21,8 @@ max_learnings_per_session = 20
 max_results = 15
 max_tokens = 4000
 min_similarity = 0.3
-recency_decay = 0.95
+recency_half_life_days = 7           # Exponential decay half-life in days
+hotness_weight = 0.2                 # Blend: 0.0 = pure semantic, 1.0 = pure hotness
 project_boost = 1.5
 
 [ingestion]

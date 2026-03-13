@@ -20,3 +20,13 @@ def test_status_command():
     runner = CliRunner()
     result = runner.invoke(main, ["status"])
     assert result.exit_code == 0
+
+
+def test_search_command_exists():
+    runner = CliRunner()
+    result = runner.invoke(main, ["search", "--help"])
+    assert result.exit_code == 0
+    assert "QUERY" in result.output
+    assert "--limit" in result.output
+    assert "--project" in result.output
+    assert "--category" in result.output

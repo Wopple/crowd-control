@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import tomllib
 from dataclasses import dataclass, field
@@ -30,8 +31,15 @@ class RetrievalConfig:
     max_results: int = 15
     max_tokens: int = 4000
     min_similarity: float = 0.3
-    recency_decay: float = 0.95
+    recency_half_life_days: float = 7.0
+    hotness_weight: float = 0.2
     project_boost: float = 1.5
+
+    def __post_init__(self):
+        if self.recency_half_life_days <= 0:
+            raise ValueError("recency_half_life_days must be positive")
+        if not (0.0 <= self.hotness_weight <= 1.0):
+            raise ValueError("hotness_weight must be between 0.0 and 1.0")
 
 
 @dataclass(frozen=True)
@@ -97,6 +105,8 @@ def load_config(config_path: Path | None = None) -> CrowdControlConfig:
     for section_name, cls in _SECTION_MAP.items():
         section_data = raw.get(section_name, {})
         if section_data:
-            top_kwargs[section_name] = cls(**section_data)
+            valid_fields = {f.name for f in dataclasses.fields(cls)}
+            filtered = {k: v for k, v in section_data.items() if k in valid_fields}
+            top_kwargs[section_name] = cls(**filtered)
 
     return CrowdControlConfig(**top_kwargs)

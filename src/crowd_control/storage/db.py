@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from pathlib import Path
 
 import lancedb
@@ -26,6 +27,7 @@ def _make_schema(vector_dimensions: int) -> pa.Schema:
             pa.field("git_sha", pa.string()),
             pa.field("timestamp", pa.timestamp("us", tz="UTC")),
             pa.field("confidence", pa.float32()),
+            pa.field("active_count", pa.int32()),
             pa.field("stale", pa.bool_()),
             pa.field("shared", pa.bool_()),
         ]
@@ -74,6 +76,7 @@ class LearningStore:
                     f"  3. Re-ingest sessions with the new model."
                 )
             self._vector_dimensions = existing_dims
+            self._migrate_active_count()
         else:
             if vector_dimensions is None:
                 raise ValueError(
@@ -168,3 +171,102 @@ class LearningStore:
         if not results:
             return False
         return results[0]["_distance"] < (1.0 - self._dedup_threshold)
+
+    def _migrate_active_count(self) -> None:
+        """Add active_count column to existing tables that lack it."""
+        if "active_count" in self._table.schema.names:
+            return
+        logger.info("Migrating table: adding active_count column")
+        rows = self._table.search().limit(self._table.count_rows()).to_list()
+        for row in rows:
+            row.pop("_rowid", None)
+            row.pop("_distance", None)
+            row["active_count"] = 0
+        schema = _make_schema(self._vector_dimensions)
+        self._db.drop_table(_TABLE_NAME)
+        self._table = self._db.create_table(_TABLE_NAME, schema=schema)
+        if rows:
+            self._table.add(rows)
+
+    def increment_active_count(self, learning_ids: list[str]) -> None:
+        """Increment active_count by 1 for each learning ID.
+
+        Fetches all matching rows in a single query, then applies batch
+        updates. No-ops silently for IDs that don't exist. Race conditions
+        on concurrent increments are acceptable — the counter is approximate.
+        """
+        if not learning_ids:
+            return
+
+        escaped_ids = [lid.replace("'", "''") for lid in learning_ids]
+        id_list = ", ".join(f"'{eid}'" for eid in escaped_ids)
+        where_clause = f"id IN ({id_list})"
+
+        rows = self._table.search().where(where_clause).limit(len(learning_ids)).to_list()
+
+        for row in rows:
+            new_count = row.get("active_count", 0) + 1
+            escaped = row["id"].replace("'", "''")
+            self._table.update(where=f"id = '{escaped}'", values={"active_count": new_count})
+
+    def vector_search(
+        self,
+        query_vector: list[float],
+        limit: int,
+        min_similarity: float = 0.3,
+        category: str | None = None,
+        exclude_stale: bool = True,
+        scope: str = "project",
+        current_project: str | None = None,
+    ) -> list[dict]:
+        """Execute a vector search with metadata filtering.
+
+        Returns up to `limit` results, each with a `_similarity` key.
+        Results below `min_similarity` are filtered out.
+        """
+        if self._table.count_rows() == 0:
+            return []
+
+        conditions: list[str] = []
+
+        if scope == "project" and current_project is not None:
+            escaped = current_project.replace("'", "''")
+            conditions.append(f"project = '{escaped}'")
+        elif scope == "mixed" and current_project is not None:
+            escaped = current_project.replace("'", "''")
+            conditions.append(f"(project = '{escaped}' OR shared = true)")
+
+        if category is not None:
+            escaped_cat = category.replace("'", "''")
+            conditions.append(f"category = '{escaped_cat}'")
+
+        if exclude_stale:
+            conditions.append("stale = false")
+
+        query = self._table.search(query_vector).metric("cosine").limit(limit)
+        if conditions:
+            query = query.where(" AND ".join(conditions))
+
+        rows = query.to_list()
+
+        # Internal keys injected by LanceDB that are not part of the schema
+        _INTERNAL_KEYS = {"_rowid", "_distance"}
+
+        results = []
+        for row in rows:
+            similarity = 1.0 - row["_distance"]
+            if similarity < min_similarity:
+                continue
+
+            # Build a clean result dict without mutating the source row
+            result = {k: v for k, v in row.items() if k not in _INTERNAL_KEYS}
+
+            # Normalize timestamp to Python datetime
+            ts = result.get("timestamp")
+            if ts is not None and not isinstance(ts, datetime):
+                result["timestamp"] = ts.to_pydatetime()
+
+            result["_similarity"] = similarity
+            results.append(result)
+
+        return results

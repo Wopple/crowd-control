@@ -10,6 +10,7 @@ crowd-control/
 ├── docs/
 │   ├── distillation.md           # How the distillation pipeline works
 │   ├── embedding-and-storage.md  # Embedding providers, LanceDB storage, dedup, pipeline
+│   ├── retrieval.md              # Retrieval and ranking system (search, scoring, packing)
 │   └── plans/
 │       ├── architecture.md        # Component architecture and data flow
 │       ├── decisions.md           # Design decisions with rationale (12 decisions)
@@ -41,9 +42,9 @@ crowd-control/
 │       │   ├── db.py              # LanceDB operations — LearningStore with CRUD and dedup
 │       │   └── models.py          # Data models (all Phase 1 models implemented)
 │       └── retrieve/
-│           ├── __init__.py
-│           ├── search.py          # Vector search + metadata filtering (stub)
-│           └── rank.py            # Recency decay, dedup, token packing (stub)
+│           ├── __init__.py        # Public exports + retrieve_learnings orchestrator
+│           ├── search.py          # Vector search, metadata filtering, scope validation, BaseResult
+│           └── rank.py            # Scoring, dedup, token packing
 └── tests/
     ├── conftest.py                # Shared fixtures (FakeEmbedder)
     ├── test_cli.py                # CLI smoke tests
@@ -52,8 +53,11 @@ crowd-control/
     ├── test_parser.py             # JSONL parser and segmentation tests
     ├── test_distiller.py          # Distillation pipeline tests (mocked subprocess)
     ├── test_embedder.py           # Embedding protocol and provider tests
-    ├── test_storage.py            # LanceDB storage operation tests
+    ├── test_storage.py            # LanceDB storage, vector search, active count tests
     ├── test_pipeline.py           # End-to-end pipeline tests (mocked distiller + fake embedder)
+    ├── test_search.py             # Search module tests (FakeEmbedder + real LanceDB)
+    ├── test_rank.py               # Ranking module tests (pure function, no DB)
+    ├── test_retrieval_integration.py  # End-to-end retrieval pipeline tests
     └── fixtures/
         ├── sample_session.jsonl   # Multi-segment session with tool calls
         ├── minimal_session.jsonl  # Minimal 1-segment session
@@ -65,7 +69,7 @@ crowd-control/
 
 | Module | Status |
 |--------|--------|
-| `cli.py` | `ingest` with full pipeline, `list`, `status` with DB stats, other commands stubbed |
+| `cli.py` | `ingest` with full pipeline, `list`, `status` with DB stats, `search` with retrieval pipeline, other commands stubbed |
 | `config.py` | Implemented — TOML loading with frozen dataclass schema |
 | `server.py` | Stub |
 | `hooks.py` | Stub |
@@ -78,4 +82,5 @@ crowd-control/
 | `embed/openai.py` | Implemented — OpenAI provider with API key validation |
 | `storage/models.py` | Implemented — all data models |
 | `storage/db.py` | Implemented — LearningStore with CRUD, dedup, dimension management |
-| `retrieve/*` | Stubs |
+| `retrieve/search.py` | Implemented — query embedding, vector search, metadata filtering |
+| `retrieve/rank.py` | Implemented — hotness scoring, dedup, token packing |

@@ -128,7 +128,6 @@ class DistillationError(Exception):
     """Raised when distillation fails."""
 
 
-
 def truncate_segment_text(text: str, max_chars: int = 30000) -> str:
     """Truncate segment text if it exceeds max_chars, keeping head and tail."""
     if len(text) <= max_chars:
@@ -362,9 +361,7 @@ def distill_session(
     The progress_callback receives (completed_count, total) after each segment finishes.
     Completions may arrive out of original segment order.
     """
-    qualifying_segments = [
-        seg for seg in session.segments if is_segment_worth_distilling(seg)
-    ]
+    qualifying_segments = [seg for seg in session.segments if is_segment_worth_distilling(seg)]
 
     total = len(qualifying_segments)
     if total == 0:
@@ -385,9 +382,7 @@ def distill_session(
     lock = threading.Lock()
     completed = 0
 
-    def _process_segment(
-        index: int, seg: ConversationSegment
-    ) -> tuple[int, list[Learning]]:
+    def _process_segment(index: int, seg: ConversationSegment) -> tuple[int, list[Learning]]:
         return index, distill_segment(
             seg,
             session,

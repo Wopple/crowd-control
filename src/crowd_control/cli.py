@@ -1,4 +1,8 @@
+import dataclasses
+import logging
+import os
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -6,6 +10,8 @@ import click
 from crowd_control.config import load_config
 from crowd_control.ingest.parser import find_sessions, parse_session_file
 from crowd_control.storage.models import TextBlock
+
+logger = logging.getLogger(__name__)
 
 
 @click.group()
@@ -113,15 +119,90 @@ def list_cmd(project, category, limit):
 
 @main.command()
 @click.argument("query")
-def search(query):
+@click.option("--limit", default=None, type=int, help="Override max results.")
+@click.option("--project", default=None, help="Filter by project path.")
+@click.option("--category", default=None, help="Filter by category.")
+def search(query, limit, project, category):
     """Search learnings for a query."""
-    click.echo("Search not yet implemented.")
+    config = load_config()
+    retrieval_config = config.retrieval
+    if limit is not None:
+        retrieval_config = dataclasses.replace(retrieval_config, max_results=limit)
+
+    try:
+        from crowd_control.embed.base import create_embedder
+
+        embedder = create_embedder(config.embedding)
+    except Exception as e:
+        click.echo(f"Embedding provider error: {e}", err=True)
+        click.echo(
+            f"Is your embedding provider ({config.embedding.provider}) running?",
+            err=True,
+        )
+        sys.exit(1)
+
+    try:
+        from crowd_control.storage.db import LearningStore
+
+        store = LearningStore(config.db_path)
+    except ValueError as e:
+        if "vector_dimensions is required" in str(e):
+            click.echo(
+                "No learnings database found. Run `crowd-control ingest` first.",
+                err=True,
+            )
+        else:
+            click.echo(f"Database error: {e}", err=True)
+        sys.exit(1)
+
+    from crowd_control.retrieve import retrieve_learnings
+
+    current_project = project or _detect_project()
+
+    result = retrieve_learnings(
+        query=query,
+        store=store,
+        embedder=embedder,
+        retrieval_config=retrieval_config,
+        scope=config.knowledge.scope,
+        current_project=current_project,
+        category=category,
+    )
+
+    _print_search_results(result, query)
 
 
 @main.command()
 def serve():
     """Run the MCP server (stdio transport)."""
     click.echo("MCP server not yet implemented.")
+
+
+def _print_search_results(result, query: str) -> None:
+    """Format and display retrieval results."""
+    click.echo(f'Searching for: "{query}"')
+    click.echo()
+
+    if not result.ranked:
+        click.echo("No matching learnings found.")
+        return
+
+    sr_by_id = {sr.id: sr for sr in result.search_results.results}
+
+    now = datetime.now(UTC)
+    for i, r in enumerate(result.ranked, 1):
+        sr = sr_by_id.get(r.id)
+        if sr is None:
+            logger.warning("Ranked result %s not found in search results lookup", r.id)
+        age = now - sr.timestamp if sr else now - now
+        age_str = _fmt_age(age)
+        active = sr.active_count if sr else 0
+        click.echo(f"  [{i}] (score={r.final_score:.2f}) [{r.category}]")
+        click.echo(f"      {r.text}")
+        click.echo(f"      project={r.project}  retrieved={active}x  age={age_str}")
+        click.echo()
+
+    click.echo(f"{len(result.ranked)} results (searched {result.total_learnings} learnings)")
 
 
 def _print_dry_run(session) -> None:
@@ -192,3 +273,25 @@ def _fmt_hms(dt) -> str:
         return dt.strftime("%H:%M:%S")
     except (ValueError, AttributeError):
         return "??:??:??"
+
+
+def _detect_project() -> str:
+    """Return the current working directory as the project path."""
+    return os.getcwd()
+
+
+def _fmt_age(td) -> str:
+    """Format a timedelta as a human-readable age string."""
+    total_seconds = int(td.total_seconds())
+    if total_seconds < 0:
+        return "0s"
+    days = total_seconds // 86400
+    hours = (total_seconds % 86400) // 3600
+    if days > 0:
+        return f"{days}d"
+    if hours > 0:
+        return f"{hours}h"
+    minutes = total_seconds // 60
+    if minutes > 0:
+        return f"{minutes}m"
+    return f"{total_seconds}s"

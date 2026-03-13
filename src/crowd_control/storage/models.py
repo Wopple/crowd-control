@@ -138,6 +138,7 @@ class Learning(BaseModel):
     git_sha: str | None = None
     timestamp: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
     confidence: float = Field(ge=0.0, le=1.0)
+    active_count: int = Field(default=0, ge=0)
     stale: bool = False
     shared: bool = False
 

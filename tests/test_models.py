@@ -214,6 +214,18 @@ class TestLearning:
         assert l.shared is False
         assert l.tags == []
         assert l.git_sha is None
+        assert l.active_count == 0
+
+    def test_active_count_explicit(self):
+        l = Learning(
+            text="test",
+            category=LearningCategory.GOTCHA,
+            project="/test",
+            session_id="s1",
+            confidence=0.8,
+            active_count=5,
+        )
+        assert l.active_count == 5
 
     def test_default_timestamp_is_aware(self):
         """Bug 6: Learning.timestamp default must be timezone-aware."""
