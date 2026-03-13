@@ -150,6 +150,22 @@ def parse_message(raw: dict) -> Message | None:
     return None
 
 
+def _flush_segment(
+    preamble: list[Message], current: list[Message]
+) -> tuple[ConversationSegment | None, list[Message]]:
+    """Try to build a segment from accumulated messages.
+
+    Returns (segment_or_none, new_preamble). If current has substantive content,
+    builds a segment from preamble + current and resets preamble. Otherwise,
+    carries current forward into preamble for the next segment.
+    """
+    if not current:
+        return None, preamble
+    if _has_substantive_content(current):
+        return _build_segment(preamble + current), []
+    return None, preamble + current
+
+
 def segment_messages(messages: list[Message]) -> list[ConversationSegment]:
     """Group messages into conversation segments by user intent boundaries."""
     if not messages:
@@ -159,24 +175,15 @@ def segment_messages(messages: list[Message]) -> list[ConversationSegment]:
     current: list[Message] = []
     preamble: list[Message] = []
 
-    def _flush():
-        nonlocal preamble
-        if not current:
-            return
-        if _has_substantive_content(current):
-            segments.append(_build_segment(preamble + current))
-            preamble = []
-        else:
-            # No real content — carry forward as preamble for the next segment
-            preamble.extend(current)
-
     for msg in messages:
         is_compact_boundary = msg.role == MessageRole.SYSTEM and any(
             isinstance(b, TextBlock) and b.text == "Conversation compacted" for b in msg.content
         )
 
         if is_compact_boundary:
-            _flush()
+            segment, _ = _flush_segment(preamble, current)
+            if segment:
+                segments.append(segment)
             current = []
             preamble = []
             continue
@@ -186,12 +193,16 @@ def segment_messages(messages: list[Message]) -> list[ConversationSegment]:
         )
 
         if is_new_user_intent and current:
-            _flush()
+            segment, preamble = _flush_segment(preamble, current)
+            if segment:
+                segments.append(segment)
             current = []
 
         current.append(msg)
 
-    _flush()
+    segment, _ = _flush_segment(preamble, current)
+    if segment:
+        segments.append(segment)
     return segments
 
 

@@ -373,6 +373,30 @@ class TestSegmentation:
         assert len(segments) == 1
         assert len(segments[0].messages) == 3
 
+    def test_trailing_non_substantive_messages_dropped(self):
+        """Non-substantive messages after the last flush with no following segment are dropped."""
+        from datetime import datetime
+
+        t1 = datetime.fromisoformat("2026-03-11T19:00:00+00:00")
+        t2 = datetime.fromisoformat("2026-03-11T19:00:05+00:00")
+        t3 = datetime.fromisoformat("2026-03-11T19:00:10+00:00")
+        t4 = datetime.fromisoformat("2026-03-11T19:00:15+00:00")
+
+        messages = [
+            self._msg("user", "first task", "u1", t1),
+            self._msg("assistant", "done", "a1", t2),
+            # New user intent triggers flush of the first segment
+            self._msg("user", "second task", "u2", t3),
+            # Only a meta message follows — no assistant reply, no substantive content
+            self._msg("user", "caveat", "u3", t4, is_meta=True),
+        ]
+        segments = segment_messages(messages)
+        # First segment is flushed. The trailing buffer (u2 + u3) has substantive
+        # content (u2 is non-meta user), so it also becomes a segment.
+        assert len(segments) == 2
+        assert len(segments[0].messages) == 2
+        assert len(segments[1].messages) == 2
+
     def test_empty_messages(self):
         assert segment_messages([]) == []
 
