@@ -6,8 +6,10 @@ import json
 import logging
 import os
 import subprocess
+import threading
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from crowd_control.storage.models import (
@@ -278,10 +280,14 @@ def distill_segment(
     session: Session,
     model: str = "haiku",
     max_learning_chars: int = 2000,
+    git_sha: str | None = None,
 ) -> list[Learning]:
     """Distill a single conversation segment into learnings.
 
     Returns a list of Learning objects extracted by the LLM.
+
+    If git_sha is provided, it is used directly. Otherwise, resolved via
+    git rev-parse HEAD in the project directory.
     """
     project_path = session.project_path if session.project_path else str(Path.cwd())
     git_branch = session.git_branch or "unknown"
@@ -293,7 +299,8 @@ def distill_segment(
     response = call_claude(prompt, LEARNING_EXTRACTION_SCHEMA, model=model)
 
     raw_learnings = response.get("learnings", [])
-    git_sha = _get_git_sha(project_path)
+    if git_sha is None:
+        git_sha = _get_git_sha(project_path)
 
     learnings: list[Learning] = []
     for raw in raw_learnings:
@@ -341,36 +348,88 @@ def distill_session(
     model: str = "haiku",
     max_learnings: int = 20,
     max_learning_chars: int = 2000,
+    max_workers: int = 8,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[Learning]:
     """Distill all qualifying segments in a session into learnings.
 
+    Processes segments concurrently using a thread pool. Each segment is
+    independent — no shared mutable state flows between distillation calls.
+
     Filters out trivial segments (too few messages, no assistant content).
     Caps results at max_learnings by confidence descending (preserving order for ties).
+
+    The progress_callback receives (completed_count, total) after each segment finishes.
+    Completions may arrive out of original segment order.
     """
     qualifying_segments = [
         seg for seg in session.segments if is_segment_worth_distilling(seg)
     ]
 
     total = len(qualifying_segments)
+    if total == 0:
+        return []
+
+    # Resolve git SHA once for all segments
+    project_path = session.project_path if session.project_path else str(Path.cwd())
+    git_sha = _get_git_sha(project_path)
+
+    effective_workers = min(max_workers, total)
+    logger.info(
+        "Distilling %d qualifying segments with %d workers",
+        total,
+        effective_workers,
+    )
+
+    indexed_learnings: list[tuple[int, list[Learning]]] = []
+    lock = threading.Lock()
+    completed = 0
+
+    def _process_segment(
+        index: int, seg: ConversationSegment
+    ) -> tuple[int, list[Learning]]:
+        return index, distill_segment(
+            seg,
+            session,
+            model=model,
+            max_learning_chars=max_learning_chars,
+            git_sha=git_sha,
+        )
+
+    with ThreadPoolExecutor(max_workers=effective_workers) as executor:
+        futures = {
+            executor.submit(_process_segment, i, seg): i
+            for i, seg in enumerate(qualifying_segments)
+        }
+
+        for future in as_completed(futures):
+            seg_index = futures[future]
+            try:
+                index, seg_learnings = future.result()
+                with lock:
+                    indexed_learnings.append((index, seg_learnings))
+                logger.debug(
+                    "Segment %d/%d completed with %d learnings",
+                    seg_index + 1,
+                    total,
+                    len(seg_learnings),
+                )
+            except DistillationError as e:
+                logger.warning("Segment %d/%d failed: %s", seg_index + 1, total, e)
+
+            with lock:
+                completed += 1
+                if progress_callback:
+                    progress_callback(completed, total)
+
+    # Flatten learnings in original segment order
+    indexed_learnings.sort(key=lambda pair: pair[0])
     all_learnings: list[Learning] = []
-
-    for i, seg in enumerate(qualifying_segments):
-        if progress_callback:
-            progress_callback(i, total)
-
-        try:
-            seg_learnings = distill_segment(
-                seg, session, model=model, max_learning_chars=max_learning_chars
-            )
-            all_learnings.extend(seg_learnings)
-        except DistillationError as e:
-            logger.warning("Segment %d/%d failed: %s", i + 1, total, e)
-            continue
+    for _, seg_learnings in indexed_learnings:
+        all_learnings.extend(seg_learnings)
 
     # Cap at max_learnings by confidence descending, preserving order for ties
     if len(all_learnings) > max_learnings:
-        # Stable sort by confidence descending — keeps original order for ties
         indexed = list(enumerate(all_learnings))
         indexed.sort(key=lambda pair: (-pair[1].confidence, pair[0]))
         kept_indices = sorted(pair[0] for pair in indexed[:max_learnings])

@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -330,6 +331,52 @@ class TestDistillSegment:
         assert learnings[0].confidence == 0.8
 
     @patch.dict("os.environ", {}, clear=True)
+    @patch("crowd_control.ingest.distiller._get_git_sha")
+    @patch("crowd_control.ingest.distiller.call_claude")
+    def test_uses_provided_git_sha(self, mock_call, mock_sha):
+        """When git_sha is provided, it is used directly without calling _get_git_sha."""
+        mock_call.return_value = {
+            "learnings": [
+                {
+                    "text": "A learning",
+                    "category": "gotcha",
+                    "tags": [],
+                    "confidence": 0.7,
+                }
+            ]
+        }
+
+        session = _make_session()
+        segment = _make_segment()
+        learnings = distill_segment(segment, session, git_sha="provided-sha")
+
+        assert learnings[0].git_sha == "provided-sha"
+        mock_sha.assert_not_called()
+
+    @patch.dict("os.environ", {}, clear=True)
+    @patch("crowd_control.ingest.distiller._get_git_sha", return_value="resolved-sha")
+    @patch("crowd_control.ingest.distiller.call_claude")
+    def test_resolves_git_sha_when_not_provided(self, mock_call, mock_sha):
+        """When git_sha is not provided, _get_git_sha is called."""
+        mock_call.return_value = {
+            "learnings": [
+                {
+                    "text": "A learning",
+                    "category": "gotcha",
+                    "tags": [],
+                    "confidence": 0.7,
+                }
+            ]
+        }
+
+        session = _make_session()
+        segment = _make_segment()
+        learnings = distill_segment(segment, session)
+
+        assert learnings[0].git_sha == "resolved-sha"
+        mock_sha.assert_called_once()
+
+    @patch.dict("os.environ", {}, clear=True)
     @patch("crowd_control.ingest.distiller._get_git_sha", return_value=None)
     @patch("crowd_control.ingest.distiller.call_claude")
     def test_skips_invalid_learnings(self, mock_call, mock_sha):
@@ -544,8 +591,9 @@ class TestIsSegmentWorthDistilling:
 class TestDistillSession:
 
     @patch.dict("os.environ", {}, clear=True)
+    @patch("crowd_control.ingest.distiller._get_git_sha", return_value=None)
     @patch("crowd_control.ingest.distiller.distill_segment")
-    def test_caps_at_max_learnings(self, mock_distill):
+    def test_caps_at_max_learnings(self, mock_distill, mock_sha):
         def make_learning(confidence):
             return Learning(
                 text=f"learning with confidence {confidence}",
@@ -573,8 +621,9 @@ class TestDistillSession:
         assert 0.7 in confidences
 
     @patch.dict("os.environ", {}, clear=True)
+    @patch("crowd_control.ingest.distiller._get_git_sha", return_value=None)
     @patch("crowd_control.ingest.distiller.distill_segment")
-    def test_continues_on_segment_error(self, mock_distill):
+    def test_continues_on_segment_error(self, mock_distill, mock_sha):
         good_learning = Learning(
             text="good learning",
             category=LearningCategory.GOTCHA,
@@ -595,8 +644,9 @@ class TestDistillSession:
         assert learnings[0].text == "good learning"
 
     @patch.dict("os.environ", {}, clear=True)
+    @patch("crowd_control.ingest.distiller._get_git_sha", return_value=None)
     @patch("crowd_control.ingest.distiller.distill_segment")
-    def test_progress_callback_called(self, mock_distill):
+    def test_progress_callback_called(self, mock_distill, mock_sha):
         mock_distill.return_value = []
 
         segments = [_make_segment(), _make_segment()]
@@ -606,5 +656,85 @@ class TestDistillSession:
         distill_session(session, progress_callback=callback)
 
         assert callback.call_count == 2
-        callback.assert_any_call(0, 2)
         callback.assert_any_call(1, 2)
+        callback.assert_any_call(2, 2)
+
+    @patch.dict("os.environ", {}, clear=True)
+    @patch("crowd_control.ingest.distiller._get_git_sha", return_value=None)
+    @patch("crowd_control.ingest.distiller.distill_segment")
+    def test_max_workers_limits_concurrency(self, mock_distill, mock_sha):
+        """ThreadPoolExecutor is initialized with the requested max_workers."""
+        mock_distill.return_value = []
+
+        segments = [_make_segment() for _ in range(4)]
+        session = _make_session(segments=segments)
+
+        with patch(
+            "crowd_control.ingest.distiller.ThreadPoolExecutor",
+            wraps=ThreadPoolExecutor,
+        ) as mock_pool:
+            distill_session(session, max_workers=2)
+            mock_pool.assert_called_once_with(max_workers=2)
+
+    @patch.dict("os.environ", {}, clear=True)
+    @patch("crowd_control.ingest.distiller._get_git_sha", return_value=None)
+    @patch("crowd_control.ingest.distiller.distill_segment")
+    def test_max_workers_capped_at_segment_count(self, mock_distill, mock_sha):
+        """ThreadPoolExecutor max_workers is capped at the number of segments."""
+        mock_distill.return_value = []
+
+        segments = [_make_segment(), _make_segment()]
+        session = _make_session(segments=segments)
+
+        with patch(
+            "crowd_control.ingest.distiller.ThreadPoolExecutor",
+            wraps=ThreadPoolExecutor,
+        ) as mock_pool:
+            distill_session(session, max_workers=8)
+            mock_pool.assert_called_once_with(max_workers=2)
+
+    @patch.dict("os.environ", {}, clear=True)
+    @patch("crowd_control.ingest.distiller._get_git_sha", return_value=None)
+    @patch("crowd_control.ingest.distiller.distill_segment")
+    def test_parallel_results_ordered_by_segment(self, mock_distill, mock_sha):
+        """Learnings appear in original segment order regardless of completion order."""
+        def make_learning(text):
+            return Learning(
+                text=text,
+                category=LearningCategory.GOTCHA,
+                project="/test",
+                session_id="s1",
+                confidence=0.7,
+            )
+
+        mock_distill.side_effect = [
+            [make_learning("from segment 0")],
+            [make_learning("from segment 1")],
+            [make_learning("from segment 2")],
+        ]
+
+        segments = [_make_segment() for _ in range(3)]
+        session = _make_session(segments=segments)
+        learnings = distill_session(session)
+
+        assert [learning.text for learning in learnings] == [
+            "from segment 0",
+            "from segment 1",
+            "from segment 2",
+        ]
+
+    @patch.dict("os.environ", {}, clear=True)
+    @patch("crowd_control.ingest.distiller._get_git_sha", return_value="abc123")
+    @patch("crowd_control.ingest.distiller.distill_segment")
+    def test_git_sha_resolved_once(self, mock_distill, mock_sha):
+        """Git SHA is resolved once and passed to all distill_segment calls."""
+        mock_distill.return_value = []
+
+        segments = [_make_segment() for _ in range(3)]
+        session = _make_session(segments=segments)
+        distill_session(session)
+
+        mock_sha.assert_called_once()
+        # Verify git_sha was passed to each distill_segment call
+        for call in mock_distill.call_args_list:
+            assert call.kwargs.get("git_sha") == "abc123"

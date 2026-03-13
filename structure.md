@@ -13,7 +13,6 @@ crowd-control/
 │       ├── architecture.md        # Component architecture and data flow
 │       ├── decisions.md           # Design decisions with rationale
 │       ├── implementation-phases.md  # High-level phase overview
-│       ├── phase-2-distillation.md       # Detailed Phase 2 steps
 │       └── project-structure.md   # Dependencies, config schema
 ├── src/
 │   └── crowd_control/

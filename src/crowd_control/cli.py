@@ -30,7 +30,9 @@ def setup():
 @main.command()
 @click.argument("path", required=False)
 @click.option("--dry-run", is_flag=True, help="Parse and show structure without storing.")
-def ingest(path, dry_run):
+@click.option("--concurrency", default=8, type=int, show_default=True,
+              help="Max parallel distillation requests.")
+def ingest(path, dry_run, concurrency):
     """Ingest a session transcript."""
     resolved = _resolve_session_path(path)
     if resolved is None:
@@ -49,13 +51,13 @@ def ingest(path, dry_run):
     # Full ingestion: parse + distill
     click.echo(f"Session {session.session_id}: {len(session.segments)} segments")
 
-    def _progress(i: int, total: int) -> None:
-        if i == 0:
-            click.echo(f"Distilling {total} qualifying segments...")
-        click.echo(f"  Segment {i + 1}/{total}...")
+    def _progress(completed: int, total: int) -> None:
+        if completed == 1:
+            click.echo(f"Distilling {total} qualifying segments ({concurrency} workers)...")
+        click.echo(f"  Completed {completed}/{total}")
 
     try:
-        learnings = distill_session(session, progress_callback=_progress)
+        learnings = distill_session(session, max_workers=concurrency, progress_callback=_progress)
     except DistillationError as e:
         click.echo(f"Distillation failed: {e}", err=True)
         sys.exit(1)

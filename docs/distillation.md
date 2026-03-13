@@ -74,10 +74,25 @@ Invalid learnings (e.g., unknown category values) are skipped with a warning.
 ### Session-Level Orchestration
 
 `distill_session` processes all qualifying segments and:
-- Calls an optional `progress_callback(i, total)` before each segment
 - Catches `DistillationError` per-segment so one failure doesn't abort the session
 - Caps total learnings at `max_learnings` (default 20) by confidence descending,
   preserving original order for ties
+
+### Concurrency
+
+`distill_session` processes qualifying segments in parallel using a thread pool.
+Each segment is submitted as an independent task — segments share no mutable state.
+
+The `max_workers` parameter (default 8, exposed as `--concurrency` on the CLI) controls
+the maximum number of concurrent `claude -p` subprocess calls. The actual number of
+threads is capped at `min(max_workers, segment_count)` to avoid unnecessary overhead.
+
+The git SHA is resolved once before submitting segments, rather than per-segment.
+
+Progress callbacks report `(completed_count, total)` as segments finish, which may be
+out of original order. Results are re-sorted by original segment index before the
+confidence-based capping step, so the output is deterministic regardless of completion
+order.
 
 ## Configuration
 
@@ -86,6 +101,7 @@ Invalid learnings (e.g., unknown category values) are skipped with a warning.
 | `model` | `"haiku"` | Claude model to use for distillation |
 | `max_learnings` | `20` | Maximum learnings per session |
 | `max_learning_chars` | `2000` | Max character length per learning text |
+| `max_workers` | `8` | Maximum concurrent distillation threads |
 | `timeout` | `120` | Subprocess timeout in seconds |
 
 ## Limitations
@@ -97,3 +113,5 @@ Invalid learnings (e.g., unknown category values) are skipped with a warning.
   LLM again
 - The git SHA is captured at distillation time, not from the session itself, so it
   reflects the current HEAD rather than the state during the session
+- High concurrency with many segments may hit Claude API rate limits — reduce
+  `--concurrency` if you see retry storms
