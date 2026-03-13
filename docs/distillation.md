@@ -104,6 +104,13 @@ order.
 | `max_workers` | `8` | Maximum concurrent distillation threads |
 | `timeout` | `120` | Subprocess timeout in seconds |
 
+## Pipeline Integration
+
+The distillation output feeds into the embedding pipeline. After `distill_session`
+returns a list of `Learning` objects, the ingestion pipeline (`ingest/pipeline.py`)
+embeds their text into vectors and stores them in LanceDB. See
+[embedding-and-storage.md](embedding-and-storage.md) for details.
+
 ## Limitations
 
 - Requires the `claude` CLI to be installed and on PATH

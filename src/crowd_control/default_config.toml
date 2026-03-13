@@ -11,9 +11,7 @@ scope = "project"
 [embedding]
 provider = "ollama"
 model = "nomic-embed-text"
-
-# [embedding.api]
-# key_env = "VOYAGE_API_KEY"
+# api_key_env = "VOYAGE_API_KEY"   # env var name, only needed for API providers
 
 [distillation]
 model = "haiku"                     # Claude Code model alias (passed to claude -p --model)
@@ -29,3 +27,4 @@ project_boost = 1.5
 [ingestion]
 auto_ingest = true
 batch_size = 5
+dedup_threshold = 0.95              # Cosine similarity threshold for near-duplicate rejection

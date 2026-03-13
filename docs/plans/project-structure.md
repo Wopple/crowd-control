@@ -57,8 +57,7 @@ scope = "project"                      # "project", "shared", or "mixed" (v0.2+)
 provider = "ollama"                # "ollama", "voyage", "openai"
 model = "nomic-embed-text"
 
-[embedding.api]
-# key_env = "VOYAGE_API_KEY"      # Uncomment for API providers
+# api_key_env = "VOYAGE_API_KEY"  # Uncomment for API providers
 
 [distillation]
 model = "haiku"                        # Claude Code model alias (passed to claude -p --model)

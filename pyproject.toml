@@ -17,11 +17,11 @@ dependencies = [
     "click",
     "lancedb",
     "mcp[cli]",
-    "ollama",
     "pydantic",
 ]
 
 [project.optional-dependencies]
+ollama = ["ollama"]
 voyage = ["voyageai"]
 openai = ["openai"]
 

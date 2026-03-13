@@ -25,4 +25,5 @@ Review and update the plan referenced by the user-provided description:
 
 ## Rules
 
-Consult the user to resolve any ambiguity in decision-making.
+- Consult the user to resolve any ambiguity in decision-making.
+- Make sure every update to the plan has a good reason. Do not change the plan just to do work or please the user. Quality is the goal.

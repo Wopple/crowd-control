@@ -361,11 +361,13 @@ dependencies = [
     { name = "click" },
     { name = "lancedb" },
     { name = "mcp", extra = ["cli"] },
-    { name = "ollama" },
     { name = "pydantic" },
 ]
 
 [package.optional-dependencies]
+ollama = [
+    { name = "ollama" },
+]
 openai = [
     { name = "openai" },
 ]
@@ -384,12 +386,12 @@ requires-dist = [
     { name = "click" },
     { name = "lancedb" },
     { name = "mcp", extras = ["cli"] },
-    { name = "ollama" },
+    { name = "ollama", marker = "extra == 'ollama'" },
     { name = "openai", marker = "extra == 'openai'" },
     { name = "pydantic" },
     { name = "voyageai", marker = "extra == 'voyage'" },
 ]
-provides-extras = ["voyage", "openai"]
+provides-extras = ["ollama", "voyage", "openai"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -116,9 +116,7 @@ provider = "ollama"
 model = "nomic-embed-text"
 
 # Only needed for API-based providers
-[embedding.api]
-# Name of env var holding API key
-key_env = "VOYAGE_API_KEY"
+# api_key_env = "VOYAGE_API_KEY"
 ```
 
 ### Implementation
