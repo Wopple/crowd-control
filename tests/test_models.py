@@ -2,6 +2,8 @@
 
 from datetime import datetime, timezone
 
+import pytest
+
 from crowd_control.storage.models import (
     ContentBlock,
     ConversationSegment,
@@ -223,6 +225,30 @@ class TestLearning:
             confidence=0.8,
         )
         assert l.timestamp.tzinfo is not None
+
+    def test_text_at_max_length_accepted(self):
+        """Text exactly at the max length should be accepted."""
+        learning = Learning(
+            text="A" * 2000,
+            category=LearningCategory.GOTCHA,
+            project="/test",
+            session_id="s1",
+            confidence=0.8,
+        )
+        assert len(learning.text) == 2000
+
+    def test_text_over_max_length_rejected(self):
+        """Text exceeding max length should raise ValidationError."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="exceeds 2000 chars"):
+            Learning(
+                text="A" * 2001,
+                category=LearningCategory.GOTCHA,
+                project="/test",
+                session_id="s1",
+                confidence=0.8,
+            )
 
     def test_roundtrip(self):
         l = Learning(

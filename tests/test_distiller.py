@@ -417,6 +417,35 @@ class TestDistillSegment:
         assert learnings[0].project != ""
         assert learnings[0].project == str(Path.cwd())
 
+    @patch.dict("os.environ", {}, clear=True)
+    @patch("crowd_control.ingest.distiller._get_git_sha", return_value=None)
+    @patch("crowd_control.ingest.distiller.call_claude")
+    def test_oversized_learning_skipped(self, mock_call, mock_sha):
+        """Oversized learning text is skipped; valid learnings in the same batch are kept."""
+        mock_call.return_value = {
+            "learnings": [
+                {
+                    "text": "Valid short learning",
+                    "category": "gotcha",
+                    "tags": [],
+                    "confidence": 0.7,
+                },
+                {
+                    "text": "X" * 3000,
+                    "category": "gotcha",
+                    "tags": [],
+                    "confidence": 0.9,
+                },
+            ]
+        }
+
+        session = _make_session()
+        segment = _make_segment()
+        learnings = distill_segment(segment, session)
+
+        assert len(learnings) == 1
+        assert learnings[0].text == "Valid short learning"
+
 
 class TestDistillSession:
     def _make_trivial_segment(self):

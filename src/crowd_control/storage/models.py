@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, field_validator
 
 
 class MessageRole(StrEnum):
@@ -125,6 +125,8 @@ class Session(BaseModel):
 
 # --- Learning (output of distillation, input to embedding/storage) ---
 
+MAX_LEARNING_TEXT_LENGTH = 2000
+
 
 class Learning(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex)
@@ -138,6 +140,15 @@ class Learning(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     stale: bool = False
     shared: bool = False
+
+    @field_validator("text")
+    @classmethod
+    def validate_text_length(cls, v: str) -> str:
+        if len(v) > MAX_LEARNING_TEXT_LENGTH:
+            raise ValueError(
+                f"Learning text exceeds {MAX_LEARNING_TEXT_LENGTH} chars (got {len(v)})"
+            )
+        return v
 
 
 def _summarize_input(input_dict: dict) -> str:
