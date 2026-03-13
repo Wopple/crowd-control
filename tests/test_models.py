@@ -213,6 +213,17 @@ class TestLearning:
         assert l.tags == []
         assert l.git_sha is None
 
+    def test_default_timestamp_is_aware(self):
+        """Bug 6: Learning.timestamp default must be timezone-aware."""
+        l = Learning(
+            text="test",
+            category=LearningCategory.GOTCHA,
+            project="/test",
+            session_id="s1",
+            confidence=0.8,
+        )
+        assert l.timestamp.tzinfo is not None
+
     def test_roundtrip(self):
         l = Learning(
             text="use is not None",

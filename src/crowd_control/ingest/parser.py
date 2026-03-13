@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from crowd_control.storage.models import (
@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 MAX_TOOL_RESULT_CHARS = 500
 _TRUNCATE_HEAD = 200
 _TRUNCATE_TAIL = 200
+
+_DATETIME_MIN_UTC = datetime.min.replace(tzinfo=UTC)
 
 # JSONL line types that are noise and should be skipped entirely.
 _SKIP_TYPES = frozenset({"file-history-snapshot", "progress", "queue-operation"})
@@ -60,8 +62,8 @@ def parse_session_file(path: Path) -> Session:
             break
 
     all_timestamps = [m.timestamp for m in messages]
-    start = min(all_timestamps) if all_timestamps else datetime.min
-    end = max(all_timestamps) if all_timestamps else datetime.min
+    start = min(all_timestamps) if all_timestamps else _DATETIME_MIN_UTC
+    end = max(all_timestamps) if all_timestamps else _DATETIME_MIN_UTC
 
     return Session(
         session_id=metadata.get("session_id", path.stem),
@@ -169,12 +171,8 @@ def segment_messages(messages: list[Message]) -> list[ConversationSegment]:
             preamble.extend(current)
 
     for msg in messages:
-        is_compact_boundary = (
-            msg.role == MessageRole.SYSTEM
-            and any(
-                isinstance(b, TextBlock) and b.text == "Conversation compacted"
-                for b in msg.content
-            )
+        is_compact_boundary = msg.role == MessageRole.SYSTEM and any(
+            isinstance(b, TextBlock) and b.text == "Conversation compacted" for b in msg.content
         )
 
         if is_compact_boundary:
@@ -184,9 +182,7 @@ def segment_messages(messages: list[Message]) -> list[ConversationSegment]:
             continue
 
         is_new_user_intent = (
-            msg.role == MessageRole.USER
-            and not msg.is_meta
-            and not _is_tool_result_only(msg)
+            msg.role == MessageRole.USER and not msg.is_meta and not _is_tool_result_only(msg)
         )
 
         if is_new_user_intent and current:
@@ -255,10 +251,12 @@ def _parse_user_content(content_raw) -> list[ContentBlock]:
                     blocks.append(TextBlock(text=text))
             elif block_type == "tool_result":
                 raw_content = _extract_tool_result_content(item.get("content", ""))
-                blocks.append(_make_tool_result_block(
-                    tool_use_id=item.get("tool_use_id", ""),
-                    content=raw_content,
-                ))
+                blocks.append(
+                    _make_tool_result_block(
+                        tool_use_id=item.get("tool_use_id", ""),
+                        content=raw_content,
+                    )
+                )
         return blocks
 
     return []
@@ -276,11 +274,13 @@ def _parse_assistant_content(content_raw: list) -> list[ContentBlock]:
             if text.strip():
                 blocks.append(TextBlock(text=text))
         elif block_type == "tool_use":
-            blocks.append(ToolUseBlock(
-                id=item.get("id", ""),
-                name=item.get("name", ""),
-                input=item.get("input", {}),
-            ))
+            blocks.append(
+                ToolUseBlock(
+                    id=item.get("id", ""),
+                    name=item.get("name", ""),
+                    input=item.get("input", {}),
+                )
+            )
         elif block_type == "thinking":
             thinking_text = item.get("thinking", "")
             blocks.append(ThinkingBlock(thinking=thinking_text))
@@ -329,9 +329,7 @@ def _has_substantive_content(messages: list[Message]) -> bool:
 
 def _is_tool_result_only(msg: Message) -> bool:
     """Return True if the message contains only tool_result blocks."""
-    return bool(msg.content) and all(
-        isinstance(b, ToolResultBlock) for b in msg.content
-    )
+    return bool(msg.content) and all(isinstance(b, ToolResultBlock) for b in msg.content)
 
 
 def _build_segment(messages: list[Message]) -> ConversationSegment:
@@ -354,10 +352,10 @@ def _build_segment(messages: list[Message]) -> ConversationSegment:
 
 
 def _parse_timestamp(ts: str) -> datetime:
-    """Parse an ISO 8601 timestamp, falling back to datetime.min."""
+    """Parse an ISO 8601 timestamp, falling back to datetime.min (UTC-aware)."""
     if not ts:
-        return datetime.min
+        return _DATETIME_MIN_UTC
     try:
         return datetime.fromisoformat(ts)
     except ValueError:
-        return datetime.min
+        return _DATETIME_MIN_UTC

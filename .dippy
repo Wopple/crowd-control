@@ -28,8 +28,11 @@ allow git worktree
 # uv
 allow uv run crowd-control
 allow uv run pytest
+allow uv run python
 allow uv run ruff
 allow uv sync
 
 # deny
 deny pytest # use: uv run pytest
+deny python -m pytest # use: uv run pytest
+deny uv run python3 # use: uv run python

@@ -90,7 +90,7 @@ def _print_dry_run(session) -> None:
     click.echo(f"Branch:  {session.git_branch or '(none)'}")
     click.echo(f"Model:   {session.model or '(unknown)'}")
     click.echo(f"Period:  {_fmt_time(session.start_time)} → {_fmt_time(session.end_time)}")
-    click.echo(f"Messages: {session.message_count} total, {filtered_count} after filtering")
+    click.echo(f"Messages: {session.message_count} parsed, {filtered_count} in segments")
     click.echo()
 
     if not session.segments:

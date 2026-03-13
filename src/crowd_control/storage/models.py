@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 
 class MessageRole(StrEnum):
@@ -72,7 +72,7 @@ class Message(BaseModel):
     content: list[ContentBlock]
     uuid: str
     parent_uuid: str | None = None
-    timestamp: datetime
+    timestamp: AwareDatetime
     model: str | None = None
     usage: dict | None = None
     is_meta: bool = False
@@ -81,8 +81,8 @@ class Message(BaseModel):
 class ConversationSegment(BaseModel):
     messages: list[Message]
     tool_names: list[str]
-    start_time: datetime
-    end_time: datetime
+    start_time: AwareDatetime
+    end_time: AwareDatetime
 
     def to_prompt_text(self, include_thinking: bool = True) -> str:
         """Render this segment as a readable transcript for the distillation prompt.
@@ -117,8 +117,8 @@ class Session(BaseModel):
     git_branch: str | None = None
     claude_version: str | None = None
     segments: list[ConversationSegment]
-    start_time: datetime
-    end_time: datetime
+    start_time: AwareDatetime
+    end_time: AwareDatetime
     message_count: int
     model: str | None = None
 
@@ -134,7 +134,7 @@ class Learning(BaseModel):
     project: str
     session_id: str
     git_sha: str | None = None
-    timestamp: datetime = Field(default_factory=datetime.now)
+    timestamp: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
     confidence: float = Field(ge=0.0, le=1.0)
     stale: bool = False
     shared: bool = False

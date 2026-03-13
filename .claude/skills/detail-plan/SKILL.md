@@ -7,7 +7,7 @@ produce a plan that can be easily followed without any room for ambiguity.
 
 ## Invocation
 
-User invokes `/detail-plan description` to create more detail. 
+User invokes `/detail-plan description`.
 
 ## Request
 

@@ -38,12 +38,31 @@ uv run ruff format   # Format
 uv run crowd-control --help   # Run the CLI
 ```
 
-## Big Fixing
+## Coding Advice
 
-1. Write the test that fails due to the bug.
-2. Run the test to confirm it fails.
-3. Fix the bug.
-4. Run the test again to confirm it passes.
+- Single Responsibility Principle
+    - Each responsibility is handled in only one software component.
+    - Each software component handles only one responsibility.
+    - These goals are ideal, not hard requirements.
+- Favor Pure Functions
+    - Complex logic must be encapsulated in a pure function.
+    - Pure functions have no side effects.
+    - Pure functions do not mutate their inputs.
+    - Pure functions do not mutate their outputs after returning (e.g. threads).
+    - Pure functions do not access global state.
+    - Pure functions do not access external resources.
+- Clean Code
+    - Code is easy to understand.
+    - Software components operate at a consistent level of abstraction.
+    - Code is straightforward.
+    - Code nests for necessity, not convenience, the less nesting the better.
+- Design Patterns
+    - Each pattern usage provides benefit, it is not superfluous.
+- Code Smells
+    - Address with design patterns.
+- Ease of future maintenance.
+- Defensive Coding
+- Performance Bottlenecks
 
 ## Tests
 

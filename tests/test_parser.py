@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from crowd_control.ingest.parser import (
+    _parse_timestamp,
     encode_project_path,
     find_sessions,
     parse_message,
@@ -81,8 +82,7 @@ class TestParseSessionFile:
         for msg in all_messages:
             # No system messages with turn_duration content should exist
             assert msg.role != MessageRole.SYSTEM or not any(
-                isinstance(b, TextBlock) and "durationMs" in b.text
-                for b in msg.content
+                isinstance(b, TextBlock) and "durationMs" in b.text for b in msg.content
             )
 
 
@@ -323,6 +323,7 @@ class TestSegmentation:
 
     def test_basic_segmentation(self):
         from datetime import datetime
+
         t1 = datetime.fromisoformat("2026-03-11T19:00:00+00:00")
         t2 = datetime.fromisoformat("2026-03-11T19:00:10+00:00")
         t3 = datetime.fromisoformat("2026-03-11T19:01:00+00:00")
@@ -341,6 +342,7 @@ class TestSegmentation:
 
     def test_tool_results_dont_split(self):
         from datetime import datetime
+
         t1 = datetime.fromisoformat("2026-03-11T19:00:00+00:00")
         t2 = datetime.fromisoformat("2026-03-11T19:00:05+00:00")
         t3 = datetime.fromisoformat("2026-03-11T19:00:10+00:00")
@@ -356,6 +358,7 @@ class TestSegmentation:
 
     def test_meta_messages_dont_split(self):
         from datetime import datetime
+
         t1 = datetime.fromisoformat("2026-03-11T19:00:00+00:00")
         t2 = datetime.fromisoformat("2026-03-11T19:00:05+00:00")
         t3 = datetime.fromisoformat("2026-03-11T19:00:10+00:00")
@@ -413,10 +416,37 @@ class TestFileEncoding:
 
 class TestEncodeProjectPath:
     def test_basic(self):
-        assert encode_project_path("/Users/daniel/git/crowd-control") == "-Users-daniel-git-crowd-control"
+        assert (
+            encode_project_path("/Users/daniel/git/crowd-control")
+            == "-Users-daniel-git-crowd-control"
+        )
 
     def test_root(self):
         assert encode_project_path("/") == "-"
+
+
+class TestTimezoneConsistency:
+    """Bug 6: Mixed timezone-aware and naive datetimes cause TypeError crash."""
+
+    def test_parse_timestamp_returns_aware_for_missing(self):
+        """Fallback for missing timestamp must be timezone-aware."""
+        result = _parse_timestamp("")
+        assert result.tzinfo is not None
+
+    def test_parse_timestamp_returns_aware_for_invalid(self):
+        """Fallback for invalid timestamp must be timezone-aware."""
+        result = _parse_timestamp("not-a-date")
+        assert result.tzinfo is not None
+
+    def test_mixed_timestamps_no_crash(self):
+        """min()/max() must not crash when mixing valid and fallback timestamps."""
+        from datetime import datetime
+
+        aware_ts = datetime.fromisoformat("2026-03-11T19:00:00.000Z")
+        fallback_ts = _parse_timestamp("")
+        # This would raise TypeError if fallback is naive
+        assert min(aware_ts, fallback_ts) is not None
+        assert max(aware_ts, fallback_ts) is not None
 
 
 class TestFindSessions:
