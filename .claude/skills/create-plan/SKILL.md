@@ -13,6 +13,11 @@ User or agent invokes `/create-plan description-of-plan`.
 Consider any relevant history when this skill is invoked. Often the user will want you to create a plan from some
 recent discovery work. This is initial planning work, so keep things high level and details will be broken down later.
 
+## Steps
+
+1. Create the plan.
+2. Only after the plan is complete, invoke the `/review-plan` skill on the plan.
+
 ## Rules
 
 - Write the details in a new file in the `docs/plans/` directory.

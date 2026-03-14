@@ -1,8 +1,6 @@
-import dataclasses
 import logging
 import os
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -124,6 +122,8 @@ def list_cmd(project, category, limit):
 @click.option("--category", default=None, help="Filter by category.")
 def search(query, limit, project, category):
     """Search learnings for a query."""
+    import dataclasses
+
     config = load_config()
     retrieval_config = config.retrieval
     if limit is not None:
@@ -175,11 +175,15 @@ def search(query, limit, project, category):
 @main.command()
 def serve():
     """Run the MCP server (stdio transport)."""
-    click.echo("MCP server not yet implemented.")
+    from crowd_control.server import run_server
+
+    run_server()
 
 
 def _print_search_results(result, query: str) -> None:
     """Format and display retrieval results."""
+    from crowd_control.formatting import extract_display_learnings
+
     click.echo(f'Searching for: "{query}"')
     click.echo()
 
@@ -187,22 +191,17 @@ def _print_search_results(result, query: str) -> None:
         click.echo("No matching learnings found.")
         return
 
-    sr_by_id = {sr.id: sr for sr in result.search_results.results}
+    learnings = extract_display_learnings(result)
 
-    now = datetime.now(UTC)
-    for i, r in enumerate(result.ranked, 1):
-        sr = sr_by_id.get(r.id)
-        if sr is None:
-            logger.warning("Ranked result %s not found in search results lookup", r.id)
-        age = now - sr.timestamp if sr else now - now
-        age_str = _fmt_age(age)
-        active = sr.active_count if sr else 0
-        click.echo(f"  [{i}] (score={r.final_score:.2f}) [{r.category}]")
-        click.echo(f"      {r.text}")
-        click.echo(f"      project={r.project}  retrieved={active}x  age={age_str}")
+    for fl in learnings:
+        age_str = f"{fl.age_days}d" if fl.age_days > 0 else "0s"
+        click.echo(f"  [{fl.rank}] (score={fl.score:.2f}) [{fl.category}]")
+        click.echo(f"      {fl.text}")
+        click.echo(f"      project={fl.project}  retrieved={fl.active_count}x  age={age_str}")
         click.echo()
 
-    click.echo(f"{len(result.ranked)} results (searched {result.total_learnings} learnings)")
+    result_word = "result" if len(learnings) == 1 else "results"
+    click.echo(f"{len(learnings)} {result_word} (searched {result.total_learnings} learnings)")
 
 
 def _print_dry_run(session) -> None:
@@ -280,18 +279,3 @@ def _detect_project() -> str:
     return os.getcwd()
 
 
-def _fmt_age(td) -> str:
-    """Format a timedelta as a human-readable age string."""
-    total_seconds = int(td.total_seconds())
-    if total_seconds < 0:
-        return "0s"
-    days = total_seconds // 86400
-    hours = (total_seconds % 86400) // 3600
-    if days > 0:
-        return f"{days}d"
-    if hours > 0:
-        return f"{hours}h"
-    minutes = total_seconds // 60
-    if minutes > 0:
-        return f"{minutes}m"
-    return f"{total_seconds}s"

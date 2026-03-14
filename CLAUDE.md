@@ -63,8 +63,14 @@ uv run crowd-control --help   # Run the CLI
 - Ease of future maintenance.
 - Defensive Coding
 - Performance Bottlenecks
+- Avoid singletons unless absolutely necessary.
+    - Instantiate objects in main code and pass in as dependencies.
 
 ## Tests
 
-Tests must not call claude code or query any LLM. Tests cannot assume a connection to an embedding model either. You may
-use claude code or an embedding model for generating test data. Tests can be written against that test data.
+- Never test implementation details, only test behavior.
+- Never test trivial code.
+- Tests must not call claude code or query any LLM.
+- Tests must not create or depend on external state.
+- Tests cannot assume a connection to an embedding model.
+- Models and connections may be used for generating test data.

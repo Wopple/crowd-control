@@ -23,7 +23,7 @@ Voyage, OpenAI), LanceDB storage with two-stage dedup, full ingestion pipeline.
 Text-based deduplication in `distill_session` (see `learning-deduplication.md`).
 Independent of Phase 4 — a refinement to the distillation pipeline.
 
-## Phase 4: Retrieval and ranking
+## Phase 4: Retrieval and ranking ✅
 
 The retrieval and ranking system, informed by algorithms from OpenViking
 (see `openviking-learnings.md` for rationale and source references).
@@ -66,17 +66,11 @@ injection). This creates the feedback loop that makes hotness scoring meaningful
 **Deliverable:** `crowd-control search "how does the auth system work"` returns ranked
 results. Frequently-retrieved learnings rise in ranking over time.
 
-## Phase 5: MCP server
+## Phase 5: MCP server ✅
 
-- Define MCP server with FastMCP
-- Implement `search_learnings` tool (calls retrieval pipeline, increments active counts)
-- Implement `add_learning` tool
-- Implement `ingest_session` tool
-- Implement `status` tool
-- Use lifespan API for DB connection management
-- Write integration tests
-
-**Deliverable:** MCP server runs via `crowd-control serve` and responds to tool calls.
+Complete. See `docs/mcp-server.md`. FastMCP server with stdio transport, lifespan-managed
+LearningStore + Embedder, four tools (search_learnings, add_learning, ingest_session,
+status), full integration tests via MCP ClientSession.
 
 ## Phase 6: Hooks and automation
 

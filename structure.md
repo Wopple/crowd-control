@@ -10,6 +10,7 @@ crowd-control/
 ├── docs/
 │   ├── distillation.md           # How the distillation pipeline works
 │   ├── embedding-and-storage.md  # Embedding providers, LanceDB storage, dedup, pipeline
+│   ├── mcp-server.md             # MCP server tools, lifespan, architecture
 │   ├── retrieval.md              # Retrieval and ranking system (search, scoring, packing)
 │   └── plans/
 │       ├── architecture.md        # Component architecture and data flow
@@ -17,13 +18,15 @@ crowd-control/
 │       ├── implementation-phases.md  # Phase overview (0-3 complete, 4-7 planned)
 │       ├── learning-deduplication.md # Within-session text-based dedup plan
 │       ├── openviking-learnings.md   # Algorithms adopted from OpenViking for Phase 4
+│       ├── phase5-mcp-server.md   # Phase 5 implementation plan
 │       └── project-structure.md   # Dependencies, config schema
 ├── src/
 │   └── crowd_control/
 │       ├── __init__.py            # Package version
 │       ├── cli.py                 # CLI entry point (click) — ingest, list, status commands
 │       ├── config.py              # Configuration loading from TOML with dataclass schema
-│       ├── server.py              # MCP server definition (stub)
+│       ├── formatting.py          # Shared result formatting for CLI and MCP server
+│       ├── server.py              # MCP server (FastMCP) — tools, lifespan, factory
 │       ├── hooks.py               # Hook handler logic (stub)
 │       ├── default_config.toml    # Default config template
 │       ├── ingest/
@@ -58,6 +61,7 @@ crowd-control/
     ├── test_search.py             # Search module tests (FakeEmbedder + real LanceDB)
     ├── test_rank.py               # Ranking module tests (pure function, no DB)
     ├── test_retrieval_integration.py  # End-to-end retrieval pipeline tests
+    ├── test_server.py               # MCP server tools, formatting, integration tests
     └── fixtures/
         ├── sample_session.jsonl   # Multi-segment session with tool calls
         ├── minimal_session.jsonl  # Minimal 1-segment session
@@ -69,9 +73,10 @@ crowd-control/
 
 | Module | Status |
 |--------|--------|
-| `cli.py` | `ingest` with full pipeline, `list`, `status` with DB stats, `search` with retrieval pipeline, other commands stubbed |
+| `cli.py` | `ingest` with full pipeline, `list`, `status` with DB stats, `search` with retrieval pipeline, `serve` with MCP server, `setup` stubbed |
 | `config.py` | Implemented — TOML loading with frozen dataclass schema |
-| `server.py` | Stub |
+| `formatting.py` | Implemented — shared result formatting (extract_display_learnings, format_results_text) |
+| `server.py` | Implemented — FastMCP server factory, lifespan, 4 tools |
 | `hooks.py` | Stub |
 | `ingest/parser.py` | Implemented — parsing, segmentation, discovery |
 | `ingest/distiller.py` | Implemented — prompt building, claude -p invocation, learning extraction |

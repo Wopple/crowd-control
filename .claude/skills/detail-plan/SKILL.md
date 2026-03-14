@@ -21,6 +21,11 @@ In addition to your best effort, make sure to include:
 - logging (once logging is implemented)
 - how the user can verify correct implementation by running the project on real data
 
+## Steps
+
+1. Create the detailed plan.
+2. Only after the detailed plan is complete, invoke the `/review-plan` skill on the plan.
+
 ## Rules
 
 - Write the details in a new file in the `docs/plans/` directory.
