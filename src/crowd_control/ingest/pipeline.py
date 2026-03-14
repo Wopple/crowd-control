@@ -60,6 +60,7 @@ def ingest_session(
         IngestResult with counts of what was processed.
     """
     # 1. Parse
+    logger.info("Parsing session %s", session_path)
     session = parse_session_file(session_path)
 
     # 2. Distill
@@ -71,6 +72,7 @@ def ingest_session(
     if max_workers is not None:
         distill_kwargs["max_workers"] = max_workers
 
+    logger.info("Distilling %d segments", len(session.segments))
     learnings = distill_session(session, **distill_kwargs)
 
     if not learnings:
@@ -83,8 +85,12 @@ def ingest_session(
         )
 
     # 3. Embed
+    logger.info("Embedding %d learnings", len(learnings))
     embedder = create_embedder(config.embedding)
-    vectors = embedder.embed([learning.text for learning in learnings])
+    texts = [learning.text for learning in learnings]
+    total_chars = sum(len(t) for t in texts)
+    logger.debug("Embedding batch size: %d, total chars: %d", len(texts), total_chars)
+    vectors = embedder.embed(texts)
 
     # 4. Build records and store
     records = []
@@ -99,6 +105,11 @@ def ingest_session(
         config.ingestion.dedup_threshold,
     )
     stored_count = store.add(records)
+    logger.info(
+        "Stored %d learnings (%d duplicates skipped)",
+        stored_count,
+        len(learnings) - stored_count,
+    )
 
     return IngestResult(
         session_id=session.session_id,

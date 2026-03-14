@@ -295,6 +295,7 @@ def distill_segment(
     if not prompt:
         return []
 
+    logger.debug("Distill segment: prompt size=%d chars", len(prompt))
     response = call_claude(prompt, LEARNING_EXTRACTION_SCHEMA, model=model)
 
     raw_learnings = response.get("learnings", [])
@@ -316,6 +317,13 @@ def distill_segment(
             learnings.append(learning)
         except Exception as e:
             logger.warning("Skipping invalid learning: %s (error: %s)", raw, e)
+
+    logger.debug(
+        "Distill segment: %d learnings, categories=%s, confidences=%s",
+        len(learnings),
+        [lr.category.value for lr in learnings],
+        [lr.confidence for lr in learnings],
+    )
 
     return learnings
 

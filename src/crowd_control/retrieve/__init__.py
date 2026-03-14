@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from crowd_control.config import RetrievalConfig
@@ -16,6 +17,8 @@ from crowd_control.retrieve.search import (
     validate_scope,
 )
 from crowd_control.storage.db import LearningStore
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -58,6 +61,8 @@ def retrieve_learnings(
         current_project=current_project,
         scope=scope,
     )
+
+    logger.info("Search: %d candidates, %d after ranking", len(search_results.results), len(ranked))
 
     if ranked:
         store.increment_active_count([r.id for r in ranked])

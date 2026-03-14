@@ -7,7 +7,7 @@ import pytest
 from conftest import FakeEmbedder
 
 from crowd_control.config import EmbeddingConfig
-from crowd_control.embed.base import create_embedder
+from crowd_control.embed.base import EmbeddingError, create_embedder
 
 
 class TestFakeEmbedder:
@@ -48,7 +48,7 @@ class TestFakeEmbedder:
 class TestCreateEmbedder:
     def test_unknown_provider(self):
         config = EmbeddingConfig(provider="nonexistent")
-        with pytest.raises(ValueError, match="Unknown embedding provider"):
+        with pytest.raises(EmbeddingError, match="Unknown embedding provider"):
             create_embedder(config)
 
 

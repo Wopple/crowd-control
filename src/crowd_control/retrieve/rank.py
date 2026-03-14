@@ -131,7 +131,10 @@ def _deduplicate(results: list[RankedResult], threshold: float = 0.85) -> list[R
             kept.append(result)
 
     if len(kept) < len(results):
-        logger.debug("dedup: removed %d near-duplicates", len(results) - len(kept))
+        logger.debug(
+            "dedup: removed %d near-duplicates from %d results",
+            len(results) - len(kept), len(results),
+        )
 
     return kept
 

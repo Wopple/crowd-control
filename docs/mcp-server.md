@@ -48,9 +48,22 @@ The server initializes shared resources once at startup via the FastMCP lifespan
 - **Embedder** — created from config, validates provider connectivity
 - **LearningStore** — opens (or creates) the LanceDB database
 
-These are shared across all tool calls for the session lifetime. If either fails to
-initialize, the server crashes at startup with a clear error message rather than failing
-silently on every tool call.
+These are shared across all tool calls for the session lifetime. If the embedder fails
+to initialize (e.g., Ollama not running), the server starts with `embedder=None`. Tools
+that need the embedder (`search_learnings`, `add_learning`, `ingest_session`) return a
+clear error message. Tools that don't need it (`status`) continue to work. This prevents
+a missing embedding provider from making the entire server unavailable.
+
+### Error Responses
+
+When a tool encounters an error, it returns a plain-text error string rather than
+raising an exception. This ensures the agent sees a useful message instead of a
+traceback. Common error responses:
+
+- `"Embedding provider not available. Is ollama running?"` — embedder failed at startup
+- `"Learnings database not available. Run 'crowd-control ingest' to initialize."` — no DB
+- `"Embedding error during search: ..."` — embedder failed during a tool call
+- `"Invalid category '...'. Must be one of: ..."` — bad category in add_learning
 
 ### Threading
 

@@ -121,14 +121,14 @@ class LearningStore:
         row.pop("_rowid", None)
         return row
 
-    def list_learnings(
+    def _query_learnings(
         self,
         project: str | None = None,
         category: str | None = None,
-        limit: int = 50,
+        limit: int | None = None,
     ) -> list[dict]:
-        """List learnings with optional filtering, ordered by timestamp descending."""
-        conditions = []
+        """Shared query logic for list and export. Returns raw rows."""
+        conditions: list[str] = []
         if project is not None:
             escaped = project.replace("'", "''")
             conditions.append(f"project = '{escaped}'")
@@ -139,7 +139,49 @@ class LearningStore:
         query = self._table.search()
         if conditions:
             query = query.where(" AND ".join(conditions))
-        results = query.limit(limit).to_list()
+
+        effective_limit = limit if limit is not None else self._table.count_rows()
+        if effective_limit == 0:
+            return []
+
+        return query.limit(effective_limit).to_list()
+
+    def export_learnings(
+        self,
+        project: str | None = None,
+        category: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict]:
+        """Export learnings as a list of dicts, stripping vectors and internal keys.
+
+        Unlike list_learnings, defaults to no limit (all matching rows).
+        Timestamps are converted to ISO 8601 strings.
+        """
+        rows = self._query_learnings(project=project, category=category, limit=limit)
+
+        _EXCLUDE_KEYS = {"vector", "_rowid", "_distance"}
+        results = []
+        for row in rows:
+            record = {k: v for k, v in row.items() if k not in _EXCLUDE_KEYS}
+            ts = record.get("timestamp")
+            if ts is not None:
+                if hasattr(ts, "isoformat"):
+                    record["timestamp"] = ts.isoformat()
+                elif hasattr(ts, "to_pydatetime"):
+                    record["timestamp"] = ts.to_pydatetime().isoformat()
+            results.append(record)
+
+        results.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
+        return results
+
+    def list_learnings(
+        self,
+        project: str | None = None,
+        category: str | None = None,
+        limit: int = 50,
+    ) -> list[dict]:
+        """List learnings with optional filtering, ordered by timestamp descending."""
+        results = self._query_learnings(project=project, category=category, limit=limit)
 
         for row in results:
             row.pop("_rowid", None)
@@ -262,6 +304,12 @@ class LearningStore:
         for row in rows:
             similarity = 1.0 - row["_distance"]
             if similarity < min_similarity:
+                logger.debug(
+                    "vector_search: rejected (similarity=%.3f < %.2f): %.80s",
+                    similarity,
+                    min_similarity,
+                    row.get("text", ""),
+                )
                 continue
 
             # Build a clean result dict without mutating the source row
@@ -274,5 +322,16 @@ class LearningStore:
 
             result["_similarity"] = similarity
             results.append(result)
+
+        rejected_count = len(rows) - len(results)
+        logger.debug(
+            "vector_search: %d raw rows, %d passed threshold (min_similarity=%.2f), "
+            "%d rejected. Lowest accepted: %.3f",
+            len(rows),
+            len(results),
+            min_similarity,
+            rejected_count,
+            min(r["_similarity"] for r in results) if results else 0.0,
+        )
 
         return results

@@ -567,6 +567,7 @@ Structured logs let us answer questions like:
 - How long are distillation calls taking?
 - How often does retrieval hit the similarity floor?
 - What fraction of the token budget is being used at injection time?
+- How useful are the learnings that are being included / rejected by the min_similarity threshold?
 
 ### What to log
 
@@ -595,6 +596,7 @@ Structured logs let us answer questions like:
 - Similarity score distribution of results
 - Token budget usage (how full is the context injection)
 - Recency decay impact (how much scores changed)
+- Which learnings are being rejected by the min_similarity threshold and their similarity score
 
 ### Implementation approach
 

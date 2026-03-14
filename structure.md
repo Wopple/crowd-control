@@ -8,26 +8,30 @@ crowd-control/
 ├── CLAUDE.md                      # Instructions for Claude Code
 ├── structure.md                   # This file — keep up-to-date
 ├── docs/
+│   ├── configuration.md          # Complete config.toml reference
 │   ├── distillation.md           # How the distillation pipeline works
 │   ├── embedding-and-storage.md  # Embedding providers, LanceDB storage, dedup, pipeline
 │   ├── hooks.md                  # Hooks, automation, queue/worker pipeline, setup command
 │   ├── mcp-server.md             # MCP server tools, lifespan, architecture, instructions
 │   ├── retrieval.md              # Retrieval and ranking system (search, scoring, packing)
+│   ├── setup.md                  # Installation and setup guide
 │   └── plans/
 │       ├── architecture.md        # Component architecture and data flow
 │       ├── decisions.md           # Design decisions with rationale (12 decisions)
-│       ├── implementation-phases.md  # Phase overview (0-6 complete, 7 planned)
+│       ├── implementation-phases.md  # Phase overview (0-7 complete)
 │       ├── learning-deduplication.md # Within-session text-based dedup plan
 │       ├── openviking-learnings.md   # Algorithms adopted from OpenViking for Phase 4
 │       ├── phase6-hooks-and-automation.md  # Phase 6 implementation plan
-│       └── project-structure.md   # Dependencies, config schema
+│       ├── phase7-polish-and-release.md   # Phase 7 implementation plan
+│       └── phase7-manual-test-checklist.md # Manual verification checklist
 ├── src/
 │   └── crowd_control/
 │       ├── __init__.py            # Package version
-│       ├── cli.py                 # CLI entry point (click) — ingest, list, status, search, serve, setup, hook, worker
-│       ├── config.py              # Configuration loading from TOML with dataclass schema
+│       ├── cli.py                 # CLI entry point (click) — ingest, list, status, search, export, serve, setup, hook, worker
+│       ├── config.py              # Configuration loading from TOML with dataclass schema, ConfigError
 │       ├── formatting.py          # Shared result formatting for CLI and MCP server
-│       ├── server.py              # MCP server (FastMCP) — tools, lifespan, factory, agent instructions
+│       ├── logging_config.py      # Logging setup: handler configuration, formatters
+│       ├── server.py              # MCP server (FastMCP) — tools, lifespan, factory, agent instructions, graceful degradation
 │       ├── hooks.py               # Hook handler logic — SessionEnd queue + worker spawning
 │       ├── worker.py              # Background ingestion worker — queue processing, retry, failure handling
 │       ├── setup.py               # Setup logic — MCP config, hook config, prerequisites, JSON merging
@@ -45,7 +49,7 @@ crowd-control/
 │       │   └── openai.py          # OpenAI embedding provider
 │       ├── storage/
 │       │   ├── __init__.py
-│       │   ├── db.py              # LanceDB operations — LearningStore with CRUD, dedup, has_session
+│       │   ├── db.py              # LanceDB operations — LearningStore with CRUD, dedup, has_session, export
 │       │   └── models.py          # Data models (all Phase 1 models implemented)
 │       └── retrieve/
 │           ├── __init__.py        # Public exports + retrieve_learnings orchestrator
@@ -69,6 +73,10 @@ crowd-control/
     ├── test_server.py               # MCP server tools, formatting, integration tests
     ├── test_setup.py              # Setup command logic tests (MCP config, hooks, merge)
     ├── test_worker.py             # Background worker tests (queue processing, retry, failures)
+    ├── test_logging_config.py     # Logging configuration tests
+    ├── test_error_handling.py     # Error handling integration tests
+    ├── test_export.py             # Export command tests
+    ├── smoke_test.sh              # Automated smoke test for fresh installs
     └── fixtures/
         ├── sample_session.jsonl   # Multi-segment session with tool calls
         ├── minimal_session.jsonl  # Minimal 1-segment session
@@ -80,21 +88,22 @@ crowd-control/
 
 | Module | Status |
 |--------|--------|
-| `cli.py` | `ingest` with full pipeline, `list`, `status` with DB stats, `search` with retrieval pipeline, `serve` with MCP server, `setup` with full auto-config, `hook session-end`, `worker` |
-| `config.py` | Implemented — TOML loading with frozen dataclass schema |
+| `cli.py` | `ingest` with full pipeline, `list`, `status` with DB stats, `search` with retrieval pipeline, `export` with JSON output, `serve` with MCP server, `setup` with full auto-config, `hook session-end`, `worker` |
+| `config.py` | Implemented — TOML loading with frozen dataclass schema, ConfigError for invalid TOML |
+| `logging_config.py` | Implemented — dual-handler logging (stderr for interactive, file for trace) |
 | `formatting.py` | Implemented — shared result formatting (extract_display_learnings, format_results_text) |
-| `server.py` | Implemented — FastMCP server factory, lifespan, 4 tools, detailed agent instructions |
+| `server.py` | Implemented — FastMCP server factory, lifespan with graceful degradation, 4 tools, detailed agent instructions |
 | `hooks.py` | Implemented — SessionEnd handler, queue file writing, worker spawning |
 | `worker.py` | Implemented — queue processing, retry with attempt tracking, failed job handling |
 | `setup.py` | Implemented — MCP config, hook config, prerequisites, JSON merging, global/project scope |
 | `ingest/parser.py` | Implemented — parsing, segmentation, discovery |
 | `ingest/distiller.py` | Implemented — prompt building, claude -p invocation, learning extraction |
 | `ingest/pipeline.py` | Implemented — end-to-end parse → distill → embed → store |
-| `embed/base.py` | Implemented — Embedder protocol, factory, EmbeddingError |
+| `embed/base.py` | Implemented — Embedder protocol, factory with error wrapping, EmbeddingError |
 | `embed/ollama.py` | Implemented — Ollama provider with dimension lookup |
 | `embed/voyage.py` | Implemented — Voyage AI provider with API key validation |
 | `embed/openai.py` | Implemented — OpenAI provider with API key validation |
 | `storage/models.py` | Implemented — all data models |
-| `storage/db.py` | Implemented — LearningStore with CRUD, dedup, has_session, dimension management |
+| `storage/db.py` | Implemented — LearningStore with CRUD, dedup, has_session, export, dimension management |
 | `retrieve/search.py` | Implemented — query embedding, vector search, metadata filtering |
 | `retrieve/rank.py` | Implemented — hotness scoring, dedup, token packing |

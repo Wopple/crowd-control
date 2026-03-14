@@ -1,28 +1,63 @@
+import json
 import logging
 import os
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
 
-from crowd_control.config import load_config
+from crowd_control.config import ConfigError, CrowdControlConfig, load_config
 from crowd_control.ingest.parser import find_sessions, parse_session_file
 from crowd_control.storage.models import TextBlock
 
 logger = logging.getLogger(__name__)
 
 
+def _load_config_safe() -> CrowdControlConfig:
+    """Load config, falling back to defaults on error.
+
+    Returns (config, error). If error is not None, config is the default
+    and the error should be reported by interactive commands.
+    """
+    try:
+        return load_config(), None
+    except ConfigError as e:
+        return CrowdControlConfig(), e
+
+
 @click.group()
 @click.version_option(package_name="crowd-control")
-def main():
+@click.option("--verbose", "-v", is_flag=True, help="Show debug output on stderr.")
+@click.pass_context
+def main(ctx, verbose):
     """Crowd Control — learnings retention system for Claude Code."""
-    pass
+    ctx.ensure_object(dict)
+    ctx.obj["verbose"] = verbose
+
+    config, config_error = _load_config_safe()
+    ctx.obj["config"] = config
+    ctx.obj["config_error"] = config_error
+
+    from crowd_control.logging_config import configure_logging
+
+    configure_logging(config, interactive=True, verbose=verbose)
+
+
+def _get_config_or_exit(ctx) -> CrowdControlConfig:
+    """Get config from context, exiting on error. For interactive commands."""
+    config_error = ctx.obj.get("config_error")
+    if config_error is not None:
+        click.echo(str(config_error), err=True)
+        sys.exit(1)
+    return ctx.obj["config"]
 
 
 @main.command()
-def status():
+@click.pass_context
+def status(ctx):
     """Show system status and database stats."""
-    config = load_config()
+    config = _get_config_or_exit(ctx)
     try:
         from crowd_control.storage.db import LearningStore
 
@@ -42,43 +77,57 @@ def hook():
 
 
 @hook.command(name="session-end")
-def hook_session_end():
+@click.pass_context
+def hook_session_end(ctx):
     """Handle SessionEnd hook event from Claude Code."""
-    import json
-
-    from crowd_control.hooks import handle_session_end_hook
-
-    config = load_config()
-
+    # Hooks must always exit 0 to avoid blocking Claude Code.
     try:
-        raw = sys.stdin.read()
-        event = json.loads(raw) if raw.strip() else {}
-    except json.JSONDecodeError:
-        click.echo("Invalid JSON on stdin", err=True)
-        sys.exit(0)
+        config = ctx.obj["config"]
 
-    result = handle_session_end_hook(event, config)
+        from crowd_control.logging_config import configure_logging
 
-    if result.skipped_reason:
-        click.echo(f"Skipped: {result.skipped_reason}", err=True)
+        configure_logging(config, interactive=False)
+
+        from crowd_control.hooks import handle_session_end_hook
+
+        try:
+            raw = sys.stdin.read()
+            event = json.loads(raw) if raw.strip() else {}
+        except json.JSONDecodeError:
+            click.echo("Invalid JSON on stdin", err=True)
+            return
+
+        result = handle_session_end_hook(event, config)
+
+        if result.skipped_reason:
+            click.echo(f"Skipped: {result.skipped_reason}", err=True)
+    except Exception as e:
+        logger.debug("hook session-end failed: %s", e)
 
 
 @main.command()
-def worker():
+@click.pass_context
+def worker(ctx):
     """Process queued ingestion jobs."""
+    config = ctx.obj["config"]
+
+    from crowd_control.logging_config import configure_logging
+
+    configure_logging(config, interactive=False)
+
     from crowd_control.worker import process_queue
 
-    config = load_config()
     process_queue(config)
 
 
 @main.command()
 @click.option("--project", "project_scope", is_flag=True, help="Configure for current project.")
-def setup(project_scope):
+@click.pass_context
+def setup(ctx, project_scope):
     """Configure hooks and MCP server in Claude Code."""
     from crowd_control.setup import run_setup
 
-    config = load_config()
+    config = _get_config_or_exit(ctx)
     result = run_setup(config, project_scope=project_scope)
 
     if result.issues:
@@ -115,7 +164,8 @@ def setup(project_scope):
     show_default=True,
     help="Max parallel distillation requests.",
 )
-def ingest(path, dry_run, concurrency):
+@click.pass_context
+def ingest(ctx, path, dry_run, concurrency):
     """Ingest a session transcript."""
     resolved = _resolve_session_path(path)
     if resolved is None:
@@ -130,7 +180,7 @@ def ingest(path, dry_run, concurrency):
         _print_dry_run(session)
         return
 
-    config = load_config()
+    config = _get_config_or_exit(ctx)
 
     def _cli_progress(stage: str, completed: int, total: int) -> None:
         if completed == 1:
@@ -158,9 +208,10 @@ def ingest(path, dry_run, concurrency):
 @click.option("--project", default=None, help="Filter by project path.")
 @click.option("--category", default=None, help="Filter by category.")
 @click.option("--limit", default=50, type=int, show_default=True)
-def list_cmd(project, category, limit):
+@click.pass_context
+def list_cmd(ctx, project, category, limit):
     """List stored learnings."""
-    config = load_config()
+    config = _get_config_or_exit(ctx)
     try:
         from crowd_control.storage.db import LearningStore
 
@@ -184,11 +235,12 @@ def list_cmd(project, category, limit):
 @click.option("--limit", default=None, type=int, help="Override max results.")
 @click.option("--project", default=None, help="Filter by project path.")
 @click.option("--category", default=None, help="Filter by category.")
-def search(query, limit, project, category):
+@click.pass_context
+def search(ctx, query, limit, project, category):
     """Search learnings for a query."""
     import dataclasses
 
-    config = load_config()
+    config = _get_config_or_exit(ctx)
     retrieval_config = config.retrieval
     if limit is not None:
         retrieval_config = dataclasses.replace(retrieval_config, max_results=limit)
@@ -234,6 +286,42 @@ def search(query, limit, project, category):
     )
 
     _print_search_results(result, query)
+
+
+@main.command()
+@click.option("--output", "-o", default=None, type=click.Path(), help="Output file path.")
+@click.option("--project", default=None, help="Filter by project path.")
+@click.option("--category", default=None, help="Filter by category.")
+@click.pass_context
+def export(ctx, output, project, category):
+    """Export learnings as JSON."""
+    config = _get_config_or_exit(ctx)
+
+    try:
+        from crowd_control.storage.db import LearningStore
+
+        store = LearningStore(config.db_path)
+    except Exception as e:
+        click.echo(f"Database not available: {e}", err=True)
+        sys.exit(1)
+
+    learnings = store.export_learnings(project=project, category=category)
+
+    export_data = {
+        "version": "1",
+        "exported_at": datetime.now(UTC).isoformat(),
+        "count": len(learnings),
+        "learnings": learnings,
+    }
+
+    json_output = json.dumps(export_data, indent=2, default=str)
+
+    if output:
+        Path(output).write_text(json_output + "\n")
+        click.echo(f"Exported {len(learnings)} learnings to {output}", err=True)
+    else:
+        click.echo(json_output)
+        click.echo(f"Exported {len(learnings)} learnings", err=True)
 
 
 @main.command()

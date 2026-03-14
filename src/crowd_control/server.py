@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from mcp.server.fastmcp import Context, FastMCP
 
 from crowd_control.config import CrowdControlConfig, load_config
-from crowd_control.embed.base import Embedder, create_embedder
+from crowd_control.embed.base import Embedder, EmbeddingError, create_embedder
 from crowd_control.formatting import format_results_text
 from crowd_control.storage.db import LearningStore
 
@@ -24,17 +24,31 @@ class ServerDeps:
     """Shared resources available to all tool calls."""
 
     config: CrowdControlConfig
-    store: LearningStore
-    embedder: Embedder
+    store: LearningStore | None
+    embedder: Embedder | None
 
 
 @asynccontextmanager
 async def _default_lifespan(server: FastMCP) -> AsyncIterator[ServerDeps]:
     """Initialize shared resources for the server lifetime."""
     config = load_config()
-    embedder = await asyncio.to_thread(create_embedder, config.embedding)
-    store = await asyncio.to_thread(LearningStore, config.db_path, embedder.dimensions)
-    logger.info("Lifespan: store and embedder initialized")
+
+    embedder: Embedder | None = None
+    try:
+        embedder = await asyncio.to_thread(create_embedder, config.embedding)
+    except EmbeddingError as e:
+        logger.warning("Embedder unavailable: %s", e)
+
+    store: LearningStore | None = None
+    try:
+        dims = embedder.dimensions if embedder else None
+        store = await asyncio.to_thread(LearningStore, config.db_path, dims)
+    except ValueError:
+        # New table needs dimensions from embedder; existing table works without.
+        # If we get here, there's no existing table and no embedder to provide dims.
+        logger.warning("LearningStore unavailable: no existing DB and no embedder")
+
+    logger.info("Lifespan: store=%s, embedder=%s", store is not None, embedder is not None)
     yield ServerDeps(config=config, store=store, embedder=embedder)
 
 
@@ -93,6 +107,27 @@ def _get_deps(ctx: Context) -> ServerDeps:
     return ctx.request_context.lifespan_context
 
 
+def _require_embedder(deps: ServerDeps) -> Embedder:
+    """Return the embedder or raise a user-friendly error."""
+    if deps.embedder is None:
+        raise EmbeddingError(
+            "Embedding provider not available. "
+            f"Is {deps.config.embedding.provider} running? "
+            "Check `crowd-control status` for details."
+        )
+    return deps.embedder
+
+
+def _require_store(deps: ServerDeps) -> LearningStore:
+    """Return the store or raise a ValueError."""
+    if deps.store is None:
+        raise ValueError(
+            "Learnings database not available. "
+            "Run `crowd-control ingest` to initialize."
+        )
+    return deps.store
+
+
 # ---------------------------------------------------------------------------
 # Tool logic — standalone async functions for testability
 # ---------------------------------------------------------------------------
@@ -108,6 +143,12 @@ async def handle_search_learnings(
     """Search past session learnings by semantic similarity."""
     import dataclasses
 
+    try:
+        embedder = _require_embedder(deps)
+        store = _require_store(deps)
+    except (EmbeddingError, ValueError) as e:
+        return str(e)
+
     retrieval_config = deps.config.retrieval
     if limit is not None:
         retrieval_config = dataclasses.replace(retrieval_config, max_results=limit)
@@ -116,16 +157,19 @@ async def handle_search_learnings(
 
     from crowd_control.retrieve import retrieve_learnings
 
-    result = await asyncio.to_thread(
-        retrieve_learnings,
-        query=query,
-        store=deps.store,
-        embedder=deps.embedder,
-        retrieval_config=retrieval_config,
-        scope=deps.config.knowledge.scope,
-        current_project=current_project,
-        category=category,
-    )
+    try:
+        result = await asyncio.to_thread(
+            retrieve_learnings,
+            query=query,
+            store=store,
+            embedder=embedder,
+            retrieval_config=retrieval_config,
+            scope=deps.config.knowledge.scope,
+            current_project=current_project,
+            category=category,
+        )
+    except EmbeddingError as e:
+        return f"Embedding error during search: {e}"
 
     logger.info("search_learnings: query=%r, results=%d", query, len(result.ranked))
     return format_results_text(result)
@@ -141,6 +185,12 @@ async def handle_add_learning(
     from pydantic import ValidationError
 
     from crowd_control.storage.models import Learning, LearningCategory
+
+    try:
+        embedder = _require_embedder(deps)
+        store = _require_store(deps)
+    except (EmbeddingError, ValueError) as e:
+        return str(e)
 
     try:
         validated_category = LearningCategory(category)
@@ -160,12 +210,15 @@ async def handle_add_learning(
     except ValidationError as e:
         return f"Invalid learning: {e}"
 
-    vectors = await asyncio.to_thread(deps.embedder.embed, [learning.text])
+    try:
+        vectors = await asyncio.to_thread(embedder.embed, [learning.text])
+    except EmbeddingError as e:
+        return f"Embedding error: {e}"
 
     record = learning.model_dump(mode="python")
     record["vector"] = vectors[0]
 
-    stored = await asyncio.to_thread(deps.store.add, [record])
+    stored = await asyncio.to_thread(store.add, [record])
 
     if stored == 0:
         return "Learning was not stored (duplicate detected)."
@@ -182,6 +235,11 @@ async def handle_ingest_session(
     from pathlib import Path
 
     from crowd_control.ingest.parser import find_sessions
+
+    try:
+        _require_embedder(deps)
+    except EmbeddingError as e:
+        return str(e)
 
     if session_path:
         resolved = Path(session_path).expanduser().resolve()
@@ -216,12 +274,29 @@ async def handle_ingest_session(
 
 async def handle_status(deps: ServerDeps) -> str:
     """Show the learnings database status and configuration."""
+    if deps.store is None:
+        return (
+            f"Database: {deps.config.db_path} (not initialized)\n"
+            f"Learnings: 0\n"
+            f"Embedding: {deps.config.embedding.provider}/{deps.config.embedding.model}"
+            f" (unavailable)\n"
+            f"Scope: {deps.config.knowledge.scope}\n"
+            f"Retrieval: max_results={deps.config.retrieval.max_results}, "
+            f"max_tokens={deps.config.retrieval.max_tokens}"
+        )
+
     count = await asyncio.to_thread(deps.store.count)
+
+    embedder_status = (
+        f"{deps.config.embedding.provider}/{deps.config.embedding.model}"
+        if deps.embedder is not None
+        else f"{deps.config.embedding.provider}/{deps.config.embedding.model} (unavailable)"
+    )
 
     return (
         f"Database: {deps.config.db_path}\n"
         f"Learnings: {count}\n"
-        f"Embedding: {deps.config.embedding.provider}/{deps.config.embedding.model}\n"
+        f"Embedding: {embedder_status}\n"
         f"Scope: {deps.config.knowledge.scope}\n"
         f"Retrieval: max_results={deps.config.retrieval.max_results}, "
         f"max_tokens={deps.config.retrieval.max_tokens}"

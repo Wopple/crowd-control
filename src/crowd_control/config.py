@@ -13,6 +13,10 @@ logger = logging.getLogger(__name__)
 _DEFAULT_CONFIG_PATH = Path("~/.crowd-control/config.toml")
 
 
+class ConfigError(Exception):
+    """Raised when configuration loading fails (e.g., invalid TOML)."""
+
+
 @dataclass(frozen=True)
 class EmbeddingConfig:
     provider: str = "ollama"
@@ -90,8 +94,11 @@ def load_config(config_path: Path | None = None) -> CrowdControlConfig:
     if not path.exists():
         return CrowdControlConfig()
 
-    with open(path, "rb") as f:
-        raw = tomllib.load(f)
+    try:
+        with open(path, "rb") as f:
+            raw = tomllib.load(f)
+    except tomllib.TOMLDecodeError as e:
+        raise ConfigError(f"Invalid TOML in {path}: {e}") from e
 
     # Extract top-level (general) fields
     general = raw.get("general", {})

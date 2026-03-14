@@ -91,6 +91,7 @@ def handle_session_end_hook(
         "queued_at": datetime.now(UTC).isoformat(),
     }
     queue_file.write_text(json.dumps(queue_data, indent=2))
+    logger.info("Queued session %s for ingestion", session_id)
 
     # 6. Spawn worker
     worker_spawned = spawn_worker(config)
@@ -128,6 +129,7 @@ def spawn_worker(config: CrowdControlConfig) -> bool:
             )
         finally:
             stderr_file.close()
+        logger.info("Spawned background worker")
         return True
     except OSError:
         logger.exception("Failed to spawn worker")

@@ -66,7 +66,9 @@ def run_setup(config: CrowdControlConfig, project_scope: bool = False) -> SetupR
         scope_label = "global"
 
     mcp_path = configure_mcp_server(target_dir, project_scope)
+    logger.info("Configured MCP server at %s", mcp_path)
     hooks_path = configure_hooks(target_dir)
+    logger.info("Configured hooks at %s", hooks_path)
 
     return SetupResult(
         scope_label=scope_label,

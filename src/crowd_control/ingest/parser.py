@@ -44,6 +44,11 @@ def parse_session_file(path: Path) -> Session:
         except json.JSONDecodeError:
             logger.warning("Skipping malformed JSON at %s:%d", path, lineno)
 
+    logger.debug(
+        "Parsed %d lines from %s (file size: %d bytes)",
+        len(raw_lines), path, path.stat().st_size,
+    )
+
     metadata = extract_session_metadata(raw_lines)
     kept: list[dict] = [r for r in raw_lines if _should_keep(r)]
 
@@ -64,6 +69,12 @@ def parse_session_file(path: Path) -> Session:
     all_timestamps = [m.timestamp for m in messages]
     start = min(all_timestamps) if all_timestamps else _DATETIME_MIN_UTC
     end = max(all_timestamps) if all_timestamps else _DATETIME_MIN_UTC
+
+    logger.debug(
+        "Session: %d messages after filtering, %d segments",
+        len(messages),
+        len(segments),
+    )
 
     return Session(
         session_id=metadata.get("session_id", path.stem),

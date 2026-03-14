@@ -36,19 +36,30 @@ class Embedder(Protocol):
 
 
 def create_embedder(config: EmbeddingConfig) -> Embedder:
-    """Create an embedder from config. Raises ValueError if provider is unknown."""
-    match config.provider:
-        case "ollama":
-            from crowd_control.embed.ollama import OllamaEmbedder
+    """Create an embedder from config. Raises EmbeddingError on failure."""
+    try:
+        match config.provider:
+            case "ollama":
+                from crowd_control.embed.ollama import OllamaEmbedder
 
-            return OllamaEmbedder(model=config.model)
-        case "voyage":
-            from crowd_control.embed.voyage import VoyageEmbedder
+                return OllamaEmbedder(model=config.model)
+            case "voyage":
+                from crowd_control.embed.voyage import VoyageEmbedder
 
-            return VoyageEmbedder(model=config.model, api_key_env=config.api_key_env)
-        case "openai":
-            from crowd_control.embed.openai import OpenAIEmbedder
+                return VoyageEmbedder(model=config.model, api_key_env=config.api_key_env)
+            case "openai":
+                from crowd_control.embed.openai import OpenAIEmbedder
 
-            return OpenAIEmbedder(model=config.model, api_key_env=config.api_key_env)
-        case _:
-            raise ValueError(f"Unknown embedding provider: {config.provider}")
+                return OpenAIEmbedder(model=config.model, api_key_env=config.api_key_env)
+            case _:
+                raise EmbeddingError(f"Unknown embedding provider: {config.provider}")
+    except ImportError as e:
+        package_hint = {"ollama": "ollama", "voyage": "voyage", "openai": "openai"}.get(
+            config.provider, config.provider
+        )
+        raise EmbeddingError(
+            f"{config.provider} package not installed. "
+            f"Run: pip install crowd-control[{package_hint}]"
+        ) from e
+    except ValueError as e:
+        raise EmbeddingError(str(e)) from e

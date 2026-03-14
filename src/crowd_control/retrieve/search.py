@@ -104,11 +104,19 @@ def search_learnings(
     ]
 
     logger.debug(
-        "search_learnings: query=%r scope=%s project=%s results=%d",
+        "search_learnings: query=%r (len=%d) scope=%s project=%s results=%d",
         query,
+        len(query),
         scope,
         current_project,
         len(results),
     )
+    if results:
+        sims = [r.similarity for r in results]
+        logger.debug(
+            "search_learnings: similarity range=[%.3f, %.3f]",
+            min(sims),
+            max(sims),
+        )
 
     return SearchResults(results=results, query_text=query)

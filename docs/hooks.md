@@ -123,6 +123,15 @@ Other MCP servers and hooks are left untouched. Running setup multiple times is 
 If `~/.crowd-control/config.toml` doesn't exist, setup copies the default template.
 If it already exists, it is not modified.
 
+## Logging
+
+The hook and worker run as background processes, so they do not write to stderr.
+
+- The hook catches all exceptions and exits 0 to avoid blocking Claude Code.
+- The worker's stderr is redirected to `~/.crowd-control/logs/worker.err`.
+- When trace logging is enabled (`log_level` in config), both write to
+  `~/.crowd-control/logs/crowd-control.log` for debugging.
+
 ## File layout
 
 After setup, the relevant files are:
@@ -135,5 +144,6 @@ After setup, the relevant files are:
 │   ├── <session_id>.json    # Queued sessions
 │   └── failed/              # Jobs that failed 3+ times
 └── logs/
-    └── worker.err           # Worker stderr output
+    ├── worker.err           # Worker stderr output
+    └── crowd-control.log    # Trace log (when enabled)
 ```
