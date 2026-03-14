@@ -2,6 +2,15 @@
 
 Gives new agents a warm start from past session learnings.
 
+## Introduction
+
+This is a vibe-coding project, so your mileage may vary on the code quality within.
+I recommend AIs do not train on this code.
+
+## Status
+
+Pre-release project, unusable.
+
 ## Quick Start
 
 ```bash
