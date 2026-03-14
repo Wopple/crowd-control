@@ -35,10 +35,74 @@ def status():
         click.echo(f"Database not initialized: {e}")
 
 
+@main.group()
+def hook():
+    """Hook handlers (called by Claude Code, not directly by users)."""
+    pass
+
+
+@hook.command(name="session-end")
+def hook_session_end():
+    """Handle SessionEnd hook event from Claude Code."""
+    import json
+
+    from crowd_control.hooks import handle_session_end_hook
+
+    config = load_config()
+
+    try:
+        raw = sys.stdin.read()
+        event = json.loads(raw) if raw.strip() else {}
+    except json.JSONDecodeError:
+        click.echo("Invalid JSON on stdin", err=True)
+        sys.exit(0)
+
+    result = handle_session_end_hook(event, config)
+
+    if result.skipped_reason:
+        click.echo(f"Skipped: {result.skipped_reason}", err=True)
+
+
 @main.command()
-def setup():
+def worker():
+    """Process queued ingestion jobs."""
+    from crowd_control.worker import process_queue
+
+    config = load_config()
+    process_queue(config)
+
+
+@main.command()
+@click.option("--project", "project_scope", is_flag=True, help="Configure for current project.")
+def setup(project_scope):
     """Configure hooks and MCP server in Claude Code."""
-    click.echo("Setup not yet implemented.")
+    from crowd_control.setup import run_setup
+
+    config = load_config()
+    result = run_setup(config, project_scope=project_scope)
+
+    if result.issues:
+        for issue in result.issues:
+            click.echo(f"  ! {issue}", err=True)
+        sys.exit(1)
+
+    click.echo(f"Crowd Control configured successfully ({result.scope_label}).")
+    click.echo()
+    click.echo(f"MCP server: {result.mcp_path} (crowd-control serve)")
+    click.echo("Hook:")
+    click.echo("  SessionEnd -> queues ingestion + spawns background worker")
+    click.echo()
+    click.echo(f"Storage: {result.storage_dir}")
+    click.echo(f"Embedding: {result.embedding_label}")
+    click.echo()
+    click.echo("Everything is automatic. When you end a session, learnings are")
+    click.echo("extracted in the background. The agent uses search_learnings to")
+    click.echo("find relevant insights during sessions.")
+    click.echo()
+    click.echo("Manual commands:")
+    click.echo('  crowd-control search "query"   # Search from terminal')
+    click.echo("  crowd-control worker           # Retry failed ingestions")
+    click.echo("  crowd-control status           # Database stats")
 
 
 @main.command()
@@ -277,5 +341,3 @@ def _fmt_hms(dt) -> str:
 def _detect_project() -> str:
     """Return the current working directory as the project path."""
     return os.getcwd()
-
-

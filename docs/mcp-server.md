@@ -125,3 +125,27 @@ The server is a thin adapter — each tool delegates to existing, tested modules
 
 Tools that need a project path default to `os.getcwd()`. This works because Claude Code
 sets the MCP server subprocess's working directory to the project root (via `.mcp.json`).
+
+## Server Instructions
+
+The MCP server includes detailed instructions that guide the agent to use
+`search_learnings` proactively. These instructions replace the need for a `SessionStart`
+hook — the agent decides when to search, and it has the user's prompt to craft precise
+queries.
+
+The instructions cover:
+- **When to search**: on new prompts, before design decisions, when debugging, when
+  building plans, when working with unfamiliar code
+- **Search tips**: keep queries concise (short phrase or sentence), one topic per query,
+  make multiple calls for multi-topic tasks
+- **When to store**: non-obvious discoveries specific to this codebase, not generic
+  programming knowledge
+
+This is the only retrieval mechanism in the session. There is no automatic injection.
+The agent decides what context is worth fetching and when.
+
+## Division of Labor
+
+The MCP server handles **on-demand retrieval** during sessions (agent calls
+`search_learnings`). The SessionEnd hook handles **automatic ingestion** after sessions
+(queue + background worker). See `docs/hooks.md` for the ingestion pipeline.

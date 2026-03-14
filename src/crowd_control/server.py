@@ -50,9 +50,37 @@ def create_server(lifespan=None) -> FastMCP:
     server = FastMCP(
         name="crowd-control",
         instructions=(
-            "Crowd Control gives you access to learnings from past coding sessions. "
-            "Use search_learnings to find relevant insights before tackling unfamiliar "
-            "code. Use add_learning to store important discoveries for future sessions."
+            "Crowd Control stores insights from past coding sessions — architecture "
+            "decisions, debugging discoveries, gotchas, conventions, and patterns "
+            "specific to this codebase. These are things learned the hard way in "
+            "previous sessions.\n\n"
+            "When to search (search_learnings):\n"
+            "- When you receive a new prompt: search for learnings related to the "
+            "task, the files involved, or the area of the codebase.\n"
+            "- Before making architecture or design decisions: check if past "
+            "sessions established relevant conventions or made related decisions.\n"
+            "- When debugging: search for known gotchas, past debugging insights, "
+            "or issues related to the error or behavior you're investigating.\n"
+            "- When building a plan: search for learnings that might inform your "
+            "approach — past attempts, constraints discovered, or patterns "
+            "that worked.\n"
+            "- When working with unfamiliar code: search for insights about how "
+            "that part of the codebase works.\n\n"
+            "Search tips:\n"
+            "- Be concise. A short phrase or single sentence works best — the "
+            "embedding model matches more precisely with focused text. Do not "
+            "pad your query with extra context or preamble.\n"
+            "- Keep each query focused on one topic. Multiple search calls for "
+            "different aspects of a task work better than one broad query.\n"
+            "- Queries are limited to a few hundred characters. If your query is "
+            "that long, split it into multiple focused searches.\n\n"
+            "When to store (add_learning):\n"
+            "- When you discover something non-obvious that would save time in a "
+            "future session — a gotcha, a pattern, an architectural constraint, "
+            "or a debugging technique specific to this codebase.\n"
+            "- Do not store generic programming knowledge that any developer would "
+            "know. Only store insights specific to this project or its particular "
+            "combination of tools and patterns."
         ),
         lifespan=lifespan or _default_lifespan,
     )
@@ -222,16 +250,16 @@ def _register_tools(server: FastMCP) -> None:
         and gotchas from previous coding sessions. Returns ranked results.
 
         Args:
-            query: What to search for (natural language).
+            query: What to search for. Keep it concise — a short phrase or single
+                   sentence. Do not pad with extra context. For multi-topic tasks,
+                   make separate calls with focused queries.
             project: Filter to a specific project path. Defaults to current project.
             category: Filter by learning category (e.g. 'debugging_insight',
                       'architecture_decision', 'gotcha', 'pattern_discovery',
                       'tool_usage', 'codebase_convention').
             limit: Maximum number of results (default: from config, typically 15).
         """
-        return await handle_search_learnings(
-            _get_deps(ctx), query, project, category, limit
-        )
+        return await handle_search_learnings(_get_deps(ctx), query, project, category, limit)
 
     @server.tool()
     async def add_learning(

@@ -161,6 +161,12 @@ class LearningStore:
         """Return the total number of learnings in the table."""
         return self._table.count_rows()
 
+    def has_session(self, session_id: str) -> bool:
+        """Check if any learnings exist for a given session ID."""
+        escaped = session_id.replace("'", "''")
+        results = self._table.search().where(f"session_id = '{escaped}'").limit(1).to_list()
+        return len(results) > 0
+
     def _has_exact_text(self, text: str) -> bool:
         escaped = text.replace("'", "''")
         results = self._table.search().where(f"text = '{escaped}'").limit(1).to_list()

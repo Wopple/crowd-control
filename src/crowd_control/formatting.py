@@ -35,18 +35,14 @@ def extract_display_learnings(result: RetrievalResult) -> list[FormattedLearning
     active counts). Logs a warning if a ranked result has no matching
     search result — this indicates a bug upstream.
     """
-    sr_by_id: dict[str, SearchResult] = {
-        sr.id: sr for sr in result.search_results.results
-    }
+    sr_by_id: dict[str, SearchResult] = {sr.id: sr for sr in result.search_results.results}
     now = datetime.now(UTC)
     learnings: list[FormattedLearning] = []
 
     for i, r in enumerate(result.ranked, 1):
         sr = sr_by_id.get(r.id)
         if sr is None:
-            logger.warning(
-                "Ranked result %s not found in search results lookup", r.id
-            )
+            logger.warning("Ranked result %s not found in search results lookup", r.id)
 
         age_days = 0
         if sr and sr.timestamp:
@@ -75,10 +71,7 @@ def format_results_text(result: RetrievalResult) -> str:
     Used by the MCP server to return results to the agent.
     """
     if not result.ranked:
-        return (
-            f"No matching learnings found "
-            f"(searched {result.total_learnings} learnings)."
-        )
+        return f"No matching learnings found (searched {result.total_learnings} learnings)."
 
     learnings = extract_display_learnings(result)
     lines = []
@@ -92,8 +85,5 @@ def format_results_text(result: RetrievalResult) -> str:
         )
 
     result_word = "result" if len(learnings) == 1 else "results"
-    lines.append(
-        f"\n{len(learnings)} {result_word} "
-        f"(searched {result.total_learnings} learnings)"
-    )
+    lines.append(f"\n{len(learnings)} {result_word} (searched {result.total_learnings} learnings)")
     return "\n\n".join(lines)

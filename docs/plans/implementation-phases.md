@@ -72,13 +72,12 @@ Complete. See `docs/mcp-server.md`. FastMCP server with stdio transport, lifespa
 LearningStore + Embedder, four tools (search_learnings, add_learning, ingest_session,
 status), full integration tests via MCP ClientSession.
 
-## Phase 6: Hooks and automation
+## Phase 6: Hooks and automation ✅
 
-- Implement `Stop` hook handler (queue ingestion job)
-- Implement `SessionStart` hook handler (retrieve + format context, increment active counts)
-- Implement `crowd-control setup` command (auto-configure hooks + MCP)
-- Add background worker for processing ingestion queue
-- Write tests for hook I/O format
+Complete. See `docs/hooks.md`. SessionEnd hook queues sessions for background
+ingestion, worker processes the queue with retry handling, `crowd-control setup`
+auto-configures hooks and MCP server, improved MCP server instructions guide the
+agent to search proactively.
 
 **Deliverable:** Fully automated loop — sessions ingest automatically, new sessions get context.
 

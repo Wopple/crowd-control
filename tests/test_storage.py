@@ -266,6 +266,19 @@ class TestIncrementActiveCount:
         store.increment_active_count([])
 
 
+class TestHasSession:
+    def test_has_session_true(self, store, embedder):
+        store.add([_make_learning(embedder, id="hs-1", session_id="sess-existing")])
+        assert store.has_session("sess-existing") is True
+
+    def test_has_session_false(self, store, embedder):
+        store.add([_make_learning(embedder, id="hs-1", session_id="sess-other")])
+        assert store.has_session("sess-missing") is False
+
+    def test_has_session_empty_table(self, store):
+        assert store.has_session("any-session") is False
+
+
 class TestVectorSearch:
     def test_basic(self, store, embedder):
         store.add(
