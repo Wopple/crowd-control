@@ -61,11 +61,10 @@ Agent searches
 
 | Topic | Document |
 |-------|----------|
-| File tree and module status | `structure.md` |
+| File tree and module status | `docs/structure.md` |
 | Transcript parsing and LLM extraction | `docs/distillation.md` |
 | Embedding providers, LanceDB schema, dedup | `docs/embedding-and-storage.md` |
 | Search, scoring formula, token packing | `docs/retrieval.md` |
 | SessionEnd hook, queue, background worker | `docs/hooks.md` |
 | MCP server tools, lifespan, agent instructions | `docs/mcp-server.md` |
-| Config file reference | `docs/configuration.md` |
-| End-user installation and troubleshooting | `docs/user-guide.md` |
+| End-user installation, config, and troubleshooting | `docs/user-guide.md` |

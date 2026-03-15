@@ -96,12 +96,19 @@ order.
 
 ## Configuration
 
+Config file parameters (`[distillation]` in `config.toml`):
+
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `model` | `"haiku"` | Claude model to use for distillation |
-| `max_learnings` | `20` | Maximum learnings per session |
+| `max_learnings_per_session` | `20` | Maximum learnings per session |
+
+Internal defaults (not exposed in config file):
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
 | `max_learning_chars` | `2000` | Max character length per learning text |
-| `max_workers` | `8` | Maximum concurrent distillation threads |
+| `max_workers` | `8` | Maximum concurrent distillation threads (CLI `--concurrency`) |
 | `timeout` | `120` | Subprocess timeout in seconds |
 
 ## Pipeline Integration

@@ -19,8 +19,8 @@ Crowd Control.
 
 ### Prerequisites
 
-- **Python 3.11+**
-- **[Claude Code](https://claude.ai/claude-code)** — installed and authenticated
+- **Python 3.11+** — uses `tomllib` from the standard library
+- **[Claude Code](https://claude.ai/claude-code)** — installed and authenticated (Crowd Control uses `claude -p` for distillation)
 - **[Ollama](https://ollama.ai)** — for local embeddings (default provider)
 
 ### Step 1: Install Ollama
@@ -62,6 +62,22 @@ You should see JSON output listing your installed models.
 ```bash
 pip install crowd-control[ollama]
 ```
+
+Or with uv:
+
+```bash
+uv tool install crowd-control[ollama]
+```
+
+For development from source:
+
+```bash
+git clone https://github.com/daniel/crowd-control.git
+cd crowd-control
+uv sync
+```
+
+When developing from source, use `uv run crowd-control` instead of `crowd-control`.
 
 ### Step 5: Run setup
 
@@ -365,7 +381,7 @@ values use the defaults. The file is created automatically by `crowd-control set
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `storage_dir` | string | `"~/.crowd-control"` | Root directory for database, queue, and logs |
-| `log_level` | string | `"off"` | Trace logging: `"off"`, `"debug"`, `"info"`, `"warning"`, `"error"` |
+| `log_level` | string | `"off"` | Trace logging: `"off"`, `"debug"`, `"info"`, `"warning"`, `"error"`. When not `"off"`, logs are written to `<storage_dir>/logs/crowd-control.log` |
 
 ### `[knowledge]`
 
@@ -379,7 +395,7 @@ Scope options:
   learnings from the current project.
 - **`shared`** — All learnings in one pool. Search returns everything regardless of
   project.
-- **`mixed`** — Learnings are classified as project-specific or universal during
+- **`mixed`** — *(v0.2+)* Learnings are classified as project-specific or universal during
   distillation. Search returns current-project learnings plus universal ones.
 
 ### `[embedding]`
@@ -434,6 +450,48 @@ Tuning tips:
 | `auto_ingest` | bool | `true` | Automatically ingest sessions via SessionEnd hook |
 | `batch_size` | int | `5` | Embedding batch size |
 | `dedup_threshold` | float | `0.95` | Cosine similarity threshold for near-duplicate rejection |
+
+With auto-ingestion disabled, the SessionEnd hook will not queue sessions. Use
+`crowd-control ingest` to ingest manually.
+
+### Configuration examples
+
+**Switching to Voyage AI:**
+
+```toml
+[embedding]
+provider = "voyage"
+model = "voyage-code-3"
+api_key_env = "VOYAGE_API_KEY"
+```
+
+**Increasing token budget for large projects:**
+
+```toml
+[retrieval]
+max_results = 25
+max_tokens = 8000
+```
+
+**Disabling auto-ingestion:**
+
+```toml
+[ingestion]
+auto_ingest = false
+```
+
+**Enabling trace logging:**
+
+```toml
+[general]
+log_level = "debug"
+```
+
+Then check `~/.crowd-control/logs/crowd-control.log` after running commands.
+
+**Important:** Switching embedding models requires re-creating the database. Vector
+dimensions are fixed at table creation. Back up and delete `~/.crowd-control/db/`, then
+re-ingest your sessions. See [Troubleshooting](#dimension-mismatch-after-switching-models).
 
 ### Full default config
 

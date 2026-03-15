@@ -7,18 +7,16 @@ crowd-control/
 ├── LICENSE                        # MIT
 ├── README.md
 ├── CLAUDE.md                      # Instructions for Claude Code
-├── structure.md                   # This file — keep up-to-date
 ├── docs/
-│   ├── configuration.md          # Complete config.toml reference
+│   ├── structure.md              # This file — keep up-to-date
 │   ├── introduction.md           # High-level project overview for agent bootstrapping
 │   ├── distillation.md           # How the distillation pipeline works
 │   ├── embedding-and-storage.md  # Embedding providers, LanceDB storage, dedup, pipeline
 │   ├── hooks.md                  # Hooks, automation, queue/worker pipeline, setup command
 │   ├── mcp-server.md             # MCP server tools, lifespan, architecture, instructions
 │   ├── retrieval.md              # Retrieval and ranking system (search, scoring, packing)
-│   ├── setup.md                  # Installation and setup guide
-│   ├── user-guide.md             # Complete user guide (commands, config, debugging)
-│   └── plans/                    # All pllaning documents are stored in this directory
+│   ├── user-guide.md             # Complete user guide (install, commands, config, debugging)
+│   └── plans/                    # All planning documents are stored in this directory
 ├── src/
 │   └── crowd_control/
 │       ├── __init__.py            # Package version

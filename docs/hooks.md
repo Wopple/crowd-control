@@ -125,7 +125,7 @@ If it already exists, it is not modified.
 
 ## Logging
 
-The hook and worker run as background processes, so they do not write to stderr.
+The hook and worker run as background processes, so their output is not visible to the user.
 
 - The hook catches all exceptions and exits 0 to avoid blocking Claude Code.
 - The worker's stderr is redirected to `~/.crowd-control/logs/worker.err`.

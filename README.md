@@ -81,7 +81,8 @@ discoveries, gotchas, conventions — and making them searchable for future agen
              ┌─────▼──────┐  ┌─────▼─────┐  ┌─────▼─────┐
              │ Distiller  │  │ Embedder  │  │ LanceDB   │
              │ (Claude    │  │ (Ollama/  │  │ (local    │
-             │  Haiku)    │  │  Voyage)  │  │  storage) │
+             │  Haiku)    │  │  Voyage/  │  │  storage) │
+             │            │  │  OpenAI)  │  │           │
              └────────────┘  └───────────┘  └───────────┘
 ```
 
