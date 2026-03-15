@@ -33,6 +33,10 @@ allow uv run ruff
 allow uv sync
 
 # deny
+deny just publish-prod # user only
+deny just publish-test # user only
+deny op # user only
 deny pytest # use: uv run pytest
 deny python -m pytest # use: uv run pytest
+deny uv publish # user only
 deny uv run python3 # use: uv run python

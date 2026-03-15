@@ -2,6 +2,7 @@
 
 ```
 crowd-control/
+├── justfile                       # Task runner (just install, just test, just lint, etc.)
 ├── pyproject.toml                 # Package config, dependencies, entry points, tool config
 ├── LICENSE                        # MIT
 ├── README.md
