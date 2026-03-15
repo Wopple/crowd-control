@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from crowd_control.config import CrowdControlConfig, IngestionConfig
-from crowd_control.hooks import handle_session_end_hook, spawn_worker
+from crowd_control.hooks import _build_worker_command, handle_session_end_hook, spawn_worker
 
 
 @pytest.fixture
@@ -163,6 +163,30 @@ class TestSpawnWorker:
         call_kwargs = mock_popen.call_args[1]
         assert call_kwargs["start_new_session"] is True
 
+    def test_uses_build_worker_command(self, config):
+        with (
+            patch("crowd_control.hooks.subprocess.Popen") as mock_popen,
+            patch("crowd_control.hooks._build_worker_command", return_value=["/usr/bin/crowd-control", "worker"]),
+        ):
+            spawn_worker(config)
+
+        cmd = mock_popen.call_args[0][0]
+        assert cmd == ["/usr/bin/crowd-control", "worker"]
+
     def test_returns_false_on_failure(self, config):
         with patch("crowd_control.hooks.subprocess.Popen", side_effect=OSError("fail")):
             assert spawn_worker(config) is False
+
+
+class TestBuildWorkerCommand:
+    def test_prefers_console_script(self):
+        with patch("crowd_control.hooks.shutil.which", return_value="/usr/local/bin/crowd-control"):
+            cmd = _build_worker_command()
+
+        assert cmd == ["/usr/local/bin/crowd-control", "worker"]
+
+    def test_falls_back_to_python_m(self):
+        with patch("crowd_control.hooks.shutil.which", return_value=None):
+            cmd = _build_worker_command()
+
+        assert cmd[1:] == ["-m", "crowd_control", "worker"]

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -103,6 +104,19 @@ def handle_session_end_hook(
     )
 
 
+def _build_worker_command() -> list[str]:
+    """Build the command to invoke the worker subprocess.
+
+    Prefers the installed console script (same entry point Claude Code uses
+    for hooks). Falls back to ``python -m crowd_control`` which works via
+    ``__main__.py``.
+    """
+    script = shutil.which("crowd-control")
+    if script:
+        return [script, "worker"]
+    return [sys.executable, "-m", "crowd_control", "worker"]
+
+
 def spawn_worker(config: CrowdControlConfig) -> bool:
     """Spawn a detached worker process to process the ingestion queue.
 
@@ -120,7 +134,7 @@ def spawn_worker(config: CrowdControlConfig) -> bool:
         stderr_file = open(log_path, "a")  # noqa: SIM115
         try:
             subprocess.Popen(
-                [sys.executable, "-m", "crowd_control.cli", "worker"],
+                _build_worker_command(),
                 env=worker_env,
                 start_new_session=True,
                 stdin=subprocess.DEVNULL,

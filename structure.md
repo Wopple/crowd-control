@@ -17,17 +17,12 @@ crowd-control/
 │   ├── retrieval.md              # Retrieval and ranking system (search, scoring, packing)
 │   ├── setup.md                  # Installation and setup guide
 │   └── plans/
-│       ├── architecture.md        # Component architecture and data flow
-│       ├── decisions.md           # Design decisions with rationale (12 decisions)
-│       ├── implementation-phases.md  # Phase overview (0-7 complete)
-│       ├── learning-deduplication.md # Within-session text-based dedup plan
-│       ├── openviking-learnings.md   # Algorithms adopted from OpenViking for Phase 4
-│       ├── phase6-hooks-and-automation.md  # Phase 6 implementation plan
-│       ├── phase7-polish-and-release.md   # Phase 7 implementation plan
+│       ├── learning-deduplication.md # Within-session text-based dedup plan (not implemented)
 │       └── phase7-manual-test-checklist.md # Manual verification checklist
 ├── src/
 │   └── crowd_control/
 │       ├── __init__.py            # Package version
+│       ├── __main__.py            # Enables `python -m crowd_control` invocation
 │       ├── cli.py                 # CLI entry point (click) — ingest, list, status, search, export, serve, setup, hook, worker
 │       ├── config.py              # Configuration loading from TOML with dataclass schema, ConfigError
 │       ├── formatting.py          # Shared result formatting for CLI and MCP server
