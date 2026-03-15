@@ -73,7 +73,10 @@ def _score_results(
     scored: list[RankedResult] = []
     for result in results:
         # Recency: clamp age to >= 0 to handle clock skew
-        age_days = max(0.0, (now - result.timestamp).total_seconds() / 86400.0)
+        if result.timestamp is None:
+            age_days = 0.0
+        else:
+            age_days = max(0.0, (now - result.timestamp).total_seconds() / 86400.0)
         recency = math.exp(-decay_constant * age_days)
 
         # Hotness: usage-weighted recency

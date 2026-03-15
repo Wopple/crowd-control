@@ -384,7 +384,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "click" },
-    { name = "lancedb" },
+    { name = "lancedb", specifier = "==0.29.2" },
     { name = "mcp", extras = ["cli"] },
     { name = "ollama", marker = "extra == 'ollama'" },
     { name = "openai", marker = "extra == 'openai'" },

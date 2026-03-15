@@ -76,7 +76,6 @@ class LearningStore:
                     f"  3. Re-ingest sessions with the new model."
                 )
             self._vector_dimensions = existing_dims
-            self._migrate_active_count()
         else:
             if vector_dimensions is None:
                 raise ValueError(
@@ -91,6 +90,8 @@ class LearningStore:
         """Insert learnings into the table with deduplication.
 
         Returns the number of learnings actually inserted (after dedup filtering).
+        Checks each learning against both existing DB rows and other learnings
+        already accepted in the same batch.
         """
         if not learnings:
             return 0
@@ -98,12 +99,17 @@ class LearningStore:
         is_empty = self._table.count_rows() == 0
 
         to_insert = []
+        seen_texts: set[str] = set()
         for learning in learnings:
+            text = learning["text"]
+            if text in seen_texts:
+                continue
             if not is_empty:
-                if self._has_exact_text(learning["text"]):
+                if self._has_exact_text(text):
                     continue
                 if self._has_near_duplicate(learning["vector"]):
                     continue
+            seen_texts.add(text)
             to_insert.append(learning)
 
         if to_insert:
@@ -186,6 +192,7 @@ class LearningStore:
         for row in results:
             row.pop("_rowid", None)
             row.pop("_distance", None)
+            row.pop("vector", None)
 
         results.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
         return results
@@ -219,22 +226,6 @@ class LearningStore:
         if not results:
             return False
         return results[0]["_distance"] < (1.0 - self._dedup_threshold)
-
-    def _migrate_active_count(self) -> None:
-        """Add active_count column to existing tables that lack it."""
-        if "active_count" in self._table.schema.names:
-            return
-        logger.info("Migrating table: adding active_count column")
-        rows = self._table.search().limit(self._table.count_rows()).to_list()
-        for row in rows:
-            row.pop("_rowid", None)
-            row.pop("_distance", None)
-            row["active_count"] = 0
-        schema = _make_schema(self._vector_dimensions)
-        self._db.drop_table(_TABLE_NAME)
-        self._table = self._db.create_table(_TABLE_NAME, schema=schema)
-        if rows:
-            self._table.add(rows)
 
     def increment_active_count(self, learning_ids: list[str]) -> None:
         """Increment active_count by 1 for each learning ID.

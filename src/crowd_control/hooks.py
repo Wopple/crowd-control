@@ -133,7 +133,7 @@ def spawn_worker(config: CrowdControlConfig) -> bool:
 
         stderr_file = open(log_path, "a")  # noqa: SIM115
         try:
-            subprocess.Popen(
+            proc = subprocess.Popen(
                 _build_worker_command(),
                 env=worker_env,
                 start_new_session=True,
@@ -141,6 +141,10 @@ def spawn_worker(config: CrowdControlConfig) -> bool:
                 stdout=subprocess.DEVNULL,
                 stderr=stderr_file,
             )
+            # Detach: this is a fire-and-forget background worker.
+            # Explicitly clear the returncode so Python does not emit
+            # a ResourceWarning when the Popen object is GC'd.
+            proc.returncode = 0
         finally:
             stderr_file.close()
         logger.info("Spawned background worker")

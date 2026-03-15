@@ -199,9 +199,4 @@ Options:
 - `--project PATH` — filter by project path
 - `--category CAT` — filter by learning category
 
-## Schema Migration
 
-Existing LanceDB tables from Phase 3 don't have the `active_count` column.
-When `LearningStore` opens such a table, it auto-migrates by rebuilding the table
-with `active_count = 0` for all existing rows. This is a one-time transparent
-operation.

@@ -374,10 +374,17 @@ def _build_segment(messages: list[Message]) -> ConversationSegment:
 
 
 def _parse_timestamp(ts: str) -> datetime:
-    """Parse an ISO 8601 timestamp, falling back to datetime.min (UTC-aware)."""
+    """Parse an ISO 8601 timestamp, falling back to datetime.min (UTC-aware).
+
+    Always returns a timezone-aware datetime. If the input has no timezone,
+    UTC is assumed (Pydantic's AwareDatetime requires timezone info).
+    """
     if not ts:
         return _DATETIME_MIN_UTC
     try:
-        return datetime.fromisoformat(ts)
+        dt = datetime.fromisoformat(ts)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt
     except ValueError:
         return _DATETIME_MIN_UTC

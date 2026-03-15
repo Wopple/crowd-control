@@ -14,7 +14,7 @@ from crowd_control.storage.models import TextBlock
 logger = logging.getLogger(__name__)
 
 
-def _load_config_safe() -> CrowdControlConfig:
+def _load_config_safe() -> tuple[CrowdControlConfig, ConfigError | None]:
     """Load config, falling back to defaults on error.
 
     Returns (config, error). If error is not None, config is the default

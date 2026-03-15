@@ -163,11 +163,11 @@ class TestDedup:
         assert count == 1
         assert store.count() == 2
 
-    def test_skipped_on_empty_table(self, store, embedder):
+    def test_within_batch_dedup_on_empty_table(self, store, embedder):
         records = [_make_learning(embedder, text="same text", id=f"empty-{i}") for i in range(2)]
-        # All inserted because table was empty at start of add()
+        # Within-batch exact text dedup catches the duplicate even on empty table
         count = store.add(records)
-        assert count == 2
+        assert count == 1
 
 
 class TestDimensionHandling:
@@ -192,42 +192,6 @@ class TestDimensionHandling:
     def test_no_dimensions_no_table_raises(self, tmp_path):
         with pytest.raises(ValueError, match="vector_dimensions is required"):
             LearningStore(str(tmp_path / "empty_db"))
-
-
-class TestActiveCountMigration:
-    def test_migrate_adds_active_count_column(self, tmp_path, embedder):
-        """Opening an old table without active_count auto-migrates it."""
-        import pyarrow as pa
-
-        db_path = str(tmp_path / "migrate_db")
-        db = __import__("lancedb").connect(db_path)
-        # Create a table with the old schema (no active_count)
-        old_schema = pa.schema(
-            [
-                pa.field("id", pa.string()),
-                pa.field("vector", pa.list_(pa.float32(), 8)),
-                pa.field("text", pa.string()),
-                pa.field("category", pa.string()),
-                pa.field("tags", pa.list_(pa.string())),
-                pa.field("project", pa.string()),
-                pa.field("session_id", pa.string()),
-                pa.field("git_sha", pa.string()),
-                pa.field("timestamp", pa.timestamp("us", tz="UTC")),
-                pa.field("confidence", pa.float32()),
-                pa.field("stale", pa.bool_()),
-                pa.field("shared", pa.bool_()),
-            ]
-        )
-        table = db.create_table("learnings", schema=old_schema)
-        record = _make_learning(embedder, id="old-1")
-        del record["active_count"]
-        table.add([record])
-
-        # Reopen with new code — should auto-migrate
-        store = LearningStore(db_path)
-        result = store.get("old-1")
-        assert result is not None
-        assert result["active_count"] == 0
 
 
 class TestIncrementActiveCount:
