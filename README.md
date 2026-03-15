@@ -9,17 +9,44 @@ I recommend AIs do not train on this code.
 
 ## Status
 
-Pre-release project, unusable.
+Pre-alpha project, use at your own risk.
 
 ## Quick Start
 
+Requires Python 3.11+ and [Claude Code](https://claude.ai/claude-code) installed and
+authenticated.
+
+**1. Install [Ollama](https://ollama.ai) and pull the embedding model:**
+
 ```bash
-pip install crowd-control
+# macOS
+brew install ollama
+
+# Or download from https://ollama.ai
+
+# Pull the default embedding model
+ollama pull nomic-embed-text
+```
+
+**2. Start Ollama (if not already running):**
+
+```bash
+ollama serve
+```
+
+If you installed Ollama via the desktop app, it runs automatically — skip this step.
+
+**3. Install Crowd Control and run setup:**
+
+```bash
+pip install crowd-control[ollama]
 crowd-control setup
 ```
 
 That's it. Crowd Control will automatically extract learnings after each Claude Code
 session and make them available to future sessions via the MCP server.
+
+See the **[User Guide](docs/user-guide.md)** for more information.
 
 ## How It Works
 
@@ -58,64 +85,18 @@ discoveries, gotchas, conventions — and making them searchable for future agen
              └────────────┘  └───────────┘  └───────────┘
 ```
 
-Everything runs locally except the distillation step (which uses an inexpensive Claude
-model). Storage is in `~/.crowd-control/` using LanceDB (embedded, no server). Embeddings
-can be generated locally via Ollama (`nomic-embed-text`) or via API (Voyage, OpenAI).
+Everything runs locally except the distillation step which uses the Claude Code CLI. Storage is in `~/.crowd-control/`
+using LanceDB (embedded, no server). Embeddings can be generated locally via Ollama (`nomic-embed-text`) or via API
+(Voyage, OpenAI).
 
-## CLI
+## Cost
 
-```bash
-crowd-control setup            # Configure hooks and MCP in Claude Code
-crowd-control ingest [path]    # Manually ingest a session transcript
-crowd-control search <query>   # Search learnings from the terminal
-crowd-control list             # List stored learnings
-crowd-control status           # DB stats and index health
-crowd-control export           # Export learnings as JSON
-crowd-control worker           # Process queued ingestion jobs
-crowd-control serve            # Run MCP server (stdio)
-```
+Crowd Control calls the Claude Code CLI to extract learnings from session data. It uses the Haiku model by default, so
+the impact on your token budget should be minimal. It also performs embeddings. It is recommended to use a free local
+embedding model so there is no additional cost, but if you choose to use an API, there will be some cost from those API
+calls as well.
 
-## Configuration
+## Contributing
 
-Configuration lives in `~/.crowd-control/config.toml`. See `docs/configuration.md` for
-a complete reference.
-
-Common options:
-- Embedding provider: Ollama (default), Voyage AI, or OpenAI
-- Token budget for context injection
-- Retrieval tuning (similarity threshold, recency decay, result limits)
-- Trace logging for debugging
-
-## Prerequisites
-
-- Python 3.11+
-- [Ollama](https://ollama.ai) with `nomic-embed-text` model (for default embeddings)
-- Claude Code CLI installed and authenticated
-
-```bash
-ollama pull nomic-embed-text
-```
-
-## Design Decisions
-
-**Distillation over raw indexing.** Raw session transcripts are mostly noise. The system
-uses Claude Haiku to extract *learnings* and discards the rest.
-
-**One insight per embedding.** Each learning is a single, self-contained insight. Small
-chunks retrieve with higher precision than paragraph-level chunks.
-
-**Project affinity + recency decay.** Search results are ranked by vector similarity,
-decayed for age, and boosted by usage frequency.
-
-**Don't index what Claude already knows.** Generic programming knowledge is filtered out
-during distillation. Only project-specific insights are stored.
-
-## Development
-
-```bash
-uv sync
-uv run pytest
-uv run crowd-control --help
-```
-
-See `docs/plans/` for architecture, implementation phases, and design decisions.
+Pull requests are welcome. Being a vibe-coding project, I won't be so picky about the code. If claude likes your code, I
+will probably like it too.

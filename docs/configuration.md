@@ -33,7 +33,7 @@ This is useful for profiling distillation quality, retrieval scoring, and simila
 
 Install provider packages with extras:
 ```bash
-pip install crowd-control[ollama]   # default, usually included
+pip install crowd-control[ollama]
 pip install crowd-control[voyage]
 pip install crowd-control[openai]
 ```

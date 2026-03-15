@@ -17,13 +17,13 @@ ollama pull nomic-embed-text
 ### From PyPI (end user)
 
 ```bash
-pip install crowd-control
+pip install crowd-control[ollama]
 ```
 
 ### With uv
 
 ```bash
-uv pip install crowd-control
+uv tool install crowd-control[ollama]
 ```
 
 ### From source (development)
