@@ -242,6 +242,44 @@ class TestCallClaude:
             call_claude("test prompt", LEARNING_EXTRACTION_SCHEMA)
         assert mock_run.call_count == 1
 
+    @patch.dict("os.environ", {}, clear=True)
+    @patch("crowd_control.ingest.distiller.subprocess.run")
+    def test_streaming_json_array_format(self, mock_run):
+        """Claude CLI --output-format json returns a JSON array of events.
+
+        The structured_output lives in the final 'result'-type element.
+        """
+        fixture = _load_fixture_response()
+        streaming_output = [
+            {"type": "system", "subtype": "init", "session_id": "test"},
+            {"type": "assistant", "message": {"role": "assistant", "content": []}},
+            {
+                "type": "result",
+                "subtype": "success",
+                "is_error": False,
+                "result": "Done",
+                "structured_output": fixture["structured_output"],
+            },
+        ]
+        mock_run.return_value = self._mock_result(stdout=json.dumps(streaming_output))
+
+        result = call_claude("test prompt", LEARNING_EXTRACTION_SCHEMA)
+        assert "learnings" in result
+        assert len(result["learnings"]) == 3
+
+    @patch.dict("os.environ", {}, clear=True)
+    @patch("crowd_control.ingest.distiller.subprocess.run")
+    def test_streaming_json_array_no_result_element(self, mock_run):
+        """JSON array with no 'result'-type element should raise DistillationError."""
+        streaming_output = [
+            {"type": "system", "subtype": "init"},
+            {"type": "assistant", "message": {"role": "assistant", "content": []}},
+        ]
+        mock_run.return_value = self._mock_result(stdout=json.dumps(streaming_output))
+
+        with pytest.raises(DistillationError, match="missing 'structured_output'"):
+            call_claude("test prompt", LEARNING_EXTRACTION_SCHEMA)
+
     @patch.dict("os.environ", {"CLAUDECODE": "1"}, clear=False)
     def test_rejects_inside_claude_code(self):
         with pytest.raises(DistillationError, match="CLAUDECODE"):

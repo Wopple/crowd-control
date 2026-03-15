@@ -163,6 +163,23 @@ def build_distillation_prompt(
     )
 
 
+def _extract_structured_output(parsed: dict | list) -> dict | None:
+    """Extract structured_output from Claude CLI response.
+
+    Handles two formats:
+    - JSON array of streaming events (current): find the "result"-type element
+    - Single JSON object (legacy): look for structured_output directly
+    """
+    if isinstance(parsed, list):
+        for event in reversed(parsed):
+            if isinstance(event, dict) and event.get("type") == "result":
+                return event.get("structured_output")
+        return None
+    if isinstance(parsed, dict):
+        return parsed.get("structured_output")
+    return None
+
+
 def call_claude(
     prompt: str,
     json_schema: dict,
@@ -245,11 +262,14 @@ def call_claude(
                 f"claude CLI returned invalid JSON (length={len(result.stdout)}): {e}"
             ) from e
 
-        # Extract structured_output — missing is non-retryable
-        if "structured_output" not in parsed:
+        # Extract structured_output from response.
+        # The CLI returns a JSON array of streaming events; the structured_output
+        # is on the final "result"-type element. Also handles the legacy single-object format.
+        structured_output = _extract_structured_output(parsed)
+        if structured_output is None:
             raise DistillationError("claude CLI response missing 'structured_output' key")
 
-        return parsed["structured_output"]
+        return structured_output
 
     # Should not reach here, but just in case
     raise last_error or DistillationError("Unexpected retry exhaustion")
