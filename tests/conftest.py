@@ -3,7 +3,32 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from datetime import UTC, datetime
+from unittest.mock import patch
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _isolate_logging():
+    """Prevent tests from writing to the production log file.
+
+    Code paths like the CLI call configure_logging() with the user's real
+    config (which may have log_level="debug"), attaching a FileHandler to
+    ~/.crowd-control/logs/crowd-control.log.
+
+    This fixture patches configure_logging at its definition module so that
+    lazy imports in CLI/server code get the mock. Tests that import the real
+    function at module level (test_logging_config.py) keep the direct
+    reference and are unaffected.
+    """
+    with patch("crowd_control.logging_config.configure_logging"):
+        yield
+    logger = logging.getLogger("crowd_control")
+    for handler in logger.handlers[:]:
+        handler.close()
+        logger.removeHandler(handler)
 
 
 def insert_learning(store, embedder, text, **overrides):

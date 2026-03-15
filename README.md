@@ -43,6 +43,17 @@ pip install crowd-control[ollama]
 crowd-control setup
 ```
 
+**4. (Optional) Nudge Claude to use the tool:**
+
+It is recommended to nudge Claude to use the tool. Hopefully this will not be necessary in the future.
+
+`CLAUDE.md`:
+```markdown
+# Bootstrapping
+
+1. Use the `search_learnings` tool from crowd-control to gather relevant information for the task at hand.
+```
+
 That's it. Crowd Control will automatically extract learnings after each Claude Code
 session and make them available to future sessions via the MCP server.
 
