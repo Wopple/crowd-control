@@ -14,16 +14,28 @@ Alpha: use at your own risk.
 ## Problem
 
 LLMs are stateless. Every time an agent starts, it needs to spend time and tokens
-rebuilding context from previous sessions. Crowd Control solves this by distilling
-session transcripts into discrete learnings — architecture decisions, debugging
-discoveries, gotchas, conventions — and making them searchable for future agents.
+rebuilding context from previous sessions.
 
 ## Solution
 
+Crowd Control helps by distilling session transcripts into discrete learnings and
+making them searchable for future agents.
+
+## How it Works
+
 After each Claude Code session ends, a hook extracts insights from the transcript and
 stores them in a local vector database. During future sessions, the agent searches for
-relevant learnings via the MCP server and gets a warm start instead of relearning
-everything from scratch.
+relevant learnings via the MCP server.
+
+Session End
+  -> Use Claude Code CLI to extract learnings
+  -> Embed learnings
+  -> Store learnings in LanceDB
+
+New Session
+  -> Agent searches for relevant information
+  -> Embed searches
+  -> Find existing learnings
 
 ## "Quick" Start
 
@@ -100,7 +112,7 @@ See the **[User Guide](docs/user-guide.md)** for more information.
 ```
 
 Everything runs locally except the distillation step which uses the Claude Code CLI. Storage is in `~/.crowd-control/`
-using LanceDB (embedded, no server). Embeddings can be generated locally via Ollama (`nomic-embed-text`) or via API
+using LanceDB (local, no server). Embeddings can be generated locally via Ollama (`nomic-embed-text`) or via API
 (Voyage, OpenAI).
 
 ## Cost
