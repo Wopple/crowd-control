@@ -9,14 +9,30 @@ I recommend AIs do not train on this code.
 
 ## Status
 
-Pre-alpha project, use at your own risk.
+Alpha: use at your own risk.
 
-## Quick Start
+## Problem
 
-Requires Python 3.11+ and [Claude Code](https://claude.ai/claude-code) installed and
-authenticated.
+LLMs are stateless. Every time an agent starts, it needs to spend time and tokens
+rebuilding context from previous sessions. Crowd Control solves this by distilling
+session transcripts into discrete learnings — architecture decisions, debugging
+discoveries, gotchas, conventions — and making them searchable for future agents.
 
-**1. Install [Ollama](https://ollama.ai) and pull the embedding model:**
+## Solution
+
+After each Claude Code session ends, a hook extracts insights from the transcript and
+stores them in a local vector database. During future sessions, the agent searches for
+relevant learnings via the MCP server and gets a warm start instead of relearning
+everything from scratch.
+
+## "Quick" Start
+
+Requires:
+- Python 3.11+
+- [Claude Code](https://claude.ai/claude-code)
+- An embedding model like [Ollama](https://ollama.ai)
+
+**1. Install Ollama and pull the embedding model:**
 
 ```bash
 # macOS
@@ -58,20 +74,6 @@ That's it. Crowd Control will automatically extract learnings after each Claude 
 session and make them available to future sessions via the MCP server.
 
 See the **[User Guide](docs/user-guide.md)** for more information.
-
-## How It Works
-
-After each Claude Code session ends, a hook extracts insights from the transcript and
-stores them in a local vector database. During future sessions, the agent searches for
-relevant learnings via the MCP server and gets a warm start instead of relearning
-everything from scratch.
-
-## The Problem
-
-LLMs are stateless. Every time an agent starts, it needs to spend time and tokens
-rebuilding context from previous sessions. Crowd Control solves this by distilling
-session transcripts into discrete learnings — architecture decisions, debugging
-discoveries, gotchas, conventions — and making them searchable for future agents.
 
 ## Architecture
 
