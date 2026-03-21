@@ -152,8 +152,15 @@ The instructions cover:
   building plans, when working with unfamiliar code
 - **Search tips**: keep queries concise (short phrase or sentence), one topic per query,
   make multiple calls for multi-topic tasks
+- **Query effectiveness**: explains the scoring model (semantic similarity, recency,
+  usage frequency), recommends `tags` as the most effective narrowing mechanism, and
+  notes `category` for type-based filtering
 - **When to store**: non-obvious discoveries specific to this codebase, not generic
   programming knowledge
+
+The `search_learnings` tool docstring also includes inline guidance for the `query`
+parameter: good/bad query examples, advice to use domain-specific terms over generic
+vocabulary, and a note to narrow with `tags`/`category` before rephrasing.
 
 This is the only retrieval mechanism in the session. There is no automatic injection.
 The agent decides what context is worth fetching and when.

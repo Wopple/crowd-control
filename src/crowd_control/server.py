@@ -88,6 +88,16 @@ def create_server(lifespan=None) -> FastMCP:
             "different aspects of a task work better than one broad query.\n"
             "- Queries are limited to a few hundred characters. If your query is "
             "that long, split it into multiple focused searches.\n\n"
+            "Query effectiveness:\n"
+            "- Results are ranked by a blend of semantic similarity, recency, "
+            "and usage frequency. The most important factor is how well your "
+            "query matches the learning text semantically.\n"
+            "- Use the `tags` parameter to narrow by domain area — this is more "
+            "effective than adding domain words to the query, which can dilute "
+            "the semantic match.\n"
+            "- Use the `category` parameter to filter by type (e.g., only "
+            "'gotcha' or only 'architecture_decision') when you know what kind "
+            "of insight you need.\n\n"
             "When to store (add_learning):\n"
             "- When you discover something non-obvious that would save time in a "
             "future session — a gotcha, a pattern, an architectural constraint, "
@@ -328,15 +338,22 @@ def _register_tools(server: FastMCP) -> None:
         and gotchas from previous coding sessions. Returns ranked results.
 
         Args:
-            query: What to search for. Keep it concise — a short phrase or single
-                   sentence. Do not pad with extra context. For multi-topic tasks,
-                   make separate calls with focused queries.
+            query: What to search for. Matched via semantic similarity against
+                   learning text. Use domain-specific terms, not generic project
+                   vocabulary. Examples:
+                   - Good: "LanceDB dedup threshold false positives"
+                   - Bad: "how does the system work" (too broad, matches everything)
+                   - Good: "collision detection AABB broadphase"
+                   - Bad: "collision rework phase 1" ("phase"/"rework" match noise)
+                   If results seem noisy, narrow with tags or category before
+                   rephrasing the query.
             project: Filter to a specific project path. Defaults to current project.
             category: Filter by learning category (e.g. 'debugging_insight',
                       'architecture_decision', 'gotcha', 'pattern_discovery',
                       'tool_usage', 'codebase_convention').
             tags: Filter to learnings with any of the given tags (match-any).
-                  Tags are case-insensitive.
+                  Tags are case-insensitive. This is the most effective way to
+                  narrow results to a specific domain area.
             limit: Maximum number of results (default: from config, typically 15).
         """
         return await handle_search_learnings(
