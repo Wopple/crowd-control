@@ -367,6 +367,32 @@ class TestIncrementActiveCount:
         store.increment_active_count([])
 
 
+class TestDistinctTags:
+    def test_returns_sorted_unique_tags(self, store, embedder):
+        """Tags from multiple learnings are deduplicated and sorted."""
+        store.add([
+            _make_learning(embedder, text="python async patterns", id="dt-1",
+                           tags=["python", "async"]),
+            _make_learning(embedder, text="react component tips", id="dt-2",
+                           tags=["javascript", "react"]),
+            _make_learning(embedder, text="python testing strategies", id="dt-3",
+                           tags=["python", "testing"]),
+        ])
+        tags = store.distinct_tags()
+        assert tags == ["async", "javascript", "python", "react", "testing"]
+
+    def test_empty_table(self, store):
+        """Empty table returns empty list."""
+        assert store.distinct_tags() == []
+
+    def test_learnings_with_no_tags(self, store, embedder):
+        """Learnings with empty tag lists don't contribute to distinct tags."""
+        store.add([
+            _make_learning(embedder, text="untagged insight", id="dt-4", tags=[]),
+        ])
+        assert store.distinct_tags() == []
+
+
 class TestHasSession:
     def test_has_session_true(self, store, embedder):
         store.add([_make_learning(embedder, id="hs-1", session_id="sess-existing")])

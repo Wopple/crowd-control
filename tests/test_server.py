@@ -275,6 +275,34 @@ async def test_status_tool(server_deps):
 
 
 @pytest.mark.anyio
+async def test_status_includes_tags(server_deps):
+    """Status output includes Tags line with available tags."""
+    await handle_add_learning(
+        server_deps,
+        text="Python asyncio event loop behavior",
+        category="debugging_insight",
+        tags=["python", "async"],
+    )
+    await handle_add_learning(
+        server_deps,
+        text="React component lifecycle hooks",
+        category="pattern_discovery",
+        tags=["javascript", "react"],
+    )
+    text = await handle_status(server_deps)
+    assert "Tags:" in text
+    assert "python" in text
+    assert "javascript" in text
+
+
+@pytest.mark.anyio
+async def test_status_empty_tags(server_deps):
+    """Status shows (none) when no tags exist."""
+    text = await handle_status(server_deps)
+    assert "Tags: (none)" in text
+
+
+@pytest.mark.anyio
 async def test_add_and_search_learning(server_deps):
     """Add a learning then search for it."""
     add_result = await handle_add_learning(

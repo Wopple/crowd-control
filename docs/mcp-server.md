@@ -122,7 +122,9 @@ learnings distilled, stored, and deduplicated.
 
 Shows database status and configuration. No parameters.
 
-Returns: database path, learning count, embedding provider/model, scope, retrieval limits.
+Returns: database path, learning count, available tags, embedding provider/model,
+scope, retrieval limits. The tag list is useful for discovering valid values before
+using the `tags` filter in `search_learnings`.
 
 ## How Tools Map to Existing Modules
 

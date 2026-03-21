@@ -10,6 +10,7 @@ from pathlib import Path
 
 import lancedb
 import pyarrow as pa
+import pyarrow.compute as pc
 
 logger = logging.getLogger(__name__)
 
@@ -343,6 +344,26 @@ class LearningStore:
     def count(self) -> int:
         """Return the total number of learnings in the table."""
         return self._table.count_rows()
+
+    def distinct_tags(self) -> list[str]:
+        """Return all unique tags across all learnings, sorted alphabetically."""
+        if self._table.count_rows() == 0:
+            return []
+
+        arrow_table = (
+            self._table.search()
+            .select(["tags"])
+            .limit(self._table.count_rows())
+            .to_arrow()
+        )
+        flat = pc.list_flatten(arrow_table.column("tags"))
+        unique = flat.unique().to_pylist()
+        logger.debug(
+            "distinct_tags: %d unique tags from %d learnings",
+            len(unique),
+            self._table.count_rows(),
+        )
+        return sorted(unique)
 
     def has_session(self, session_id: str) -> bool:
         """Check if any learnings exist for a given session ID."""

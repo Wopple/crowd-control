@@ -63,8 +63,11 @@ def status(ctx):
 
         store = LearningStore(config.db_path)
         count = store.count()
+        tags = store.distinct_tags()
+        tag_str = ", ".join(tags) if tags else "(none)"
         click.echo(f"Database: {config.db_path}")
         click.echo(f"Learnings: {count}")
+        click.echo(f"Tags: {tag_str}")
         click.echo(f"Embedding: {config.embedding.provider}/{config.embedding.model}")
     except Exception as e:
         click.echo(f"Database not initialized: {e}")

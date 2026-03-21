@@ -38,6 +38,7 @@ allow uv run --extra ollama
 allow uv run crowd-control
 allow uv run pytest
 allow uv run python
+allow uv run python3
 allow uv run ruff
 allow uv sync
 

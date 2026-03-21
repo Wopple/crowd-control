@@ -104,7 +104,8 @@ def create_server(lifespan=None) -> FastMCP:
             "query matches the learning text semantically.\n"
             "- Use the `tags` parameter to narrow by domain area — this is more "
             "effective than adding domain words to the query, which can dilute "
-            "the semantic match.\n"
+            "the semantic match. Call `status` to see available tags before "
+            "filtering.\n"
             "- Use the `category` parameter to filter by type (e.g., only "
             "'gotcha' or only 'architecture_decision') when you know what kind "
             "of insight you need.\n\n"
@@ -314,7 +315,11 @@ async def handle_status(deps: ServerDeps) -> str:
             f"max_tokens={deps.config.retrieval.max_tokens}"
         )
 
-    count = await asyncio.to_thread(deps.store.count)
+    def _get_status_data(store: LearningStore) -> tuple[int, list[str]]:
+        return store.count(), store.distinct_tags()
+
+    count, tags = await asyncio.to_thread(_get_status_data, deps.store)
+    tag_str = ", ".join(tags) if tags else "(none)"
 
     embedder_status = (
         f"{deps.config.embedding.provider}/{deps.config.embedding.model}"
@@ -325,6 +330,7 @@ async def handle_status(deps: ServerDeps) -> str:
     return (
         f"Database: {deps.config.db_path}\n"
         f"Learnings: {count}\n"
+        f"Tags: {tag_str}\n"
         f"Embedding: {embedder_status}\n"
         f"Scope: {deps.config.knowledge.scope}\n"
         f"Retrieval: max_results={deps.config.retrieval.max_results}, "
@@ -370,7 +376,8 @@ def _register_tools(server: FastMCP) -> None:
                       'tool_usage', 'codebase_convention').
             tags: Filter to learnings with any of the given tags (match-any).
                   Tags are case-insensitive. This is the most effective way to
-                  narrow results to a specific domain area.
+                  narrow results to a specific domain area. Call the `status`
+                  tool to see available tags.
             limit: Maximum number of results (default: from config, typically 15).
         """
         return await handle_search_learnings(
@@ -417,8 +424,9 @@ def _register_tools(server: FastMCP) -> None:
     async def status(ctx: Context = None) -> str:
         """Show the learnings database status and configuration.
 
-        Returns the number of stored learnings, database path, and current
-        embedding configuration.
+        Returns the number of stored learnings, available tags, database
+        path, and current embedding configuration. Use this to discover
+        valid tag values before filtering with search_learnings.
         """
         return await handle_status(_get_deps(ctx))
 
