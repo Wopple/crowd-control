@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import math
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -10,6 +12,23 @@ import lancedb
 import pyarrow as pa
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class DuplicateInfo:
+    """Details about a learning rejected as a near-duplicate."""
+
+    new_text: str
+    matched_text: str
+    similarity: float
+
+
+@dataclass
+class AddResult:
+    """Result of an add() operation with deduplication details."""
+
+    stored: int
+    duplicates: list[DuplicateInfo] = field(default_factory=list)
 
 _TABLE_NAME = "learnings"
 
@@ -38,6 +57,32 @@ def _get_vector_dim_from_schema(schema: pa.Schema) -> int:
     """Extract vector dimensionality from an existing table's schema."""
     vector_field = schema.field("vector")
     return vector_field.type.list_size
+
+
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Compute cosine similarity between two vectors."""
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(x * x for x in b))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+def _find_similar_in_batch(
+    vector: list[float],
+    accepted_vectors: list[list[float]],
+    threshold: float,
+) -> tuple[int, float] | None:
+    """Find the first vector in accepted_vectors above the similarity threshold.
+
+    Returns (index, similarity) if found, else None.
+    """
+    for i, accepted in enumerate(accepted_vectors):
+        sim = _cosine_similarity(vector, accepted)
+        if sim >= threshold:
+            return i, sim
+    return None
 
 
 class LearningStore:
@@ -86,36 +131,72 @@ class LearningStore:
             schema = _make_schema(vector_dimensions)
             self._table = self._db.create_table(_TABLE_NAME, schema=schema)
 
-    def add(self, learnings: list[dict]) -> int:
+    def add(self, learnings: list[dict]) -> AddResult:
         """Insert learnings into the table with deduplication.
 
-        Returns the number of learnings actually inserted (after dedup filtering).
-        Checks each learning against both existing DB rows and other learnings
-        already accepted in the same batch.
+        Returns an AddResult with the count of stored learnings and details
+        about any rejected duplicates. Checks each learning against existing
+        DB rows, and also performs intra-batch dedup (both exact text and
+        vector similarity) so duplicates within a single batch are caught.
         """
         if not learnings:
-            return 0
+            return AddResult(stored=0)
 
         is_empty = self._table.count_rows() == 0
 
-        to_insert = []
+        to_insert: list[dict] = []
+        duplicates: list[DuplicateInfo] = []
         seen_texts: set[str] = set()
+        accepted_vectors: list[list[float]] = []
+
         for learning in learnings:
             text = learning["text"]
+            vector = learning["vector"]
+
+            # Exact text dedup: within batch
             if text in seen_texts:
                 continue
+
             if not is_empty:
+                # Exact text dedup: against existing DB rows
                 if self._has_exact_text(text):
                     continue
-                if self._has_near_duplicate(learning["vector"]):
+                # Near-duplicate dedup: against existing DB rows
+                match = self._find_near_duplicate(vector)
+                if match is not None:
+                    matched_text, similarity = match
+                    duplicates.append(DuplicateInfo(text, matched_text, similarity))
+                    logger.debug(
+                        "dedup: rejected (sim=%.3f): %.80s",
+                        similarity,
+                        text,
+                    )
                     continue
+
+            # Near-duplicate dedup: within batch (covers empty table case too)
+            batch_match = _find_similar_in_batch(
+                vector, accepted_vectors, self._dedup_threshold
+            )
+            if batch_match is not None:
+                matched_idx, similarity = batch_match
+                duplicates.append(
+                    DuplicateInfo(text, to_insert[matched_idx]["text"], similarity)
+                )
+                logger.debug(
+                    "dedup: rejected within batch (sim=%.3f): %.80s",
+                    similarity,
+                    text,
+                )
+                continue
+
             seen_texts.add(text)
+            accepted_vectors.append(vector)
             to_insert.append(learning)
 
         if to_insert:
             self._table.add(to_insert)
 
-        return len(to_insert)
+        return AddResult(stored=len(to_insert), duplicates=duplicates)
 
     def get(self, learning_id: str) -> dict | None:
         """Get a single learning by ID. Returns None if not found."""
@@ -221,11 +302,18 @@ class LearningStore:
         results = self._table.search().where(f"text = '{escaped}'").limit(1).to_list()
         return len(results) > 0
 
-    def _has_near_duplicate(self, vector: list[float]) -> bool:
+    def _find_near_duplicate(self, vector: list[float]) -> tuple[str, float] | None:
+        """Find the nearest learning above the dedup threshold.
+
+        Returns (matched_text, similarity) if a near-duplicate exists, else None.
+        """
         results = self._table.search(vector).metric("cosine").limit(1).to_list()
         if not results:
-            return False
-        return results[0]["_distance"] < (1.0 - self._dedup_threshold)
+            return None
+        similarity = 1.0 - results[0]["_distance"]
+        if similarity >= self._dedup_threshold:
+            return results[0]["text"], similarity
+        return None
 
     def increment_active_count(self, learning_ids: list[str]) -> None:
         """Increment active_count by 1 for each learning ID.

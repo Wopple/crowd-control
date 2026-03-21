@@ -52,13 +52,20 @@ class TestAddAndGet:
         assert result["confidence"] == pytest.approx(0.8, abs=0.01)
 
     def test_add_multiple(self, store, embedder):
-        records = [_make_learning(embedder, text=f"Learning {i}", id=f"id-{i}") for i in range(5)]
-        count = store.add(records)
-        assert count == 5
+        texts = [
+            "python asyncio event loops",
+            "javascript react component lifecycle",
+            "database postgresql query optimization",
+            "rust ownership and borrowing rules",
+            "docker container networking setup",
+        ]
+        records = [_make_learning(embedder, text=t, id=f"id-{i}") for i, t in enumerate(texts)]
+        result = store.add(records)
+        assert result.stored == 5
         assert store.count() == 5
 
     def test_add_empty_list(self, store):
-        assert store.add([]) == 0
+        assert store.add([]).stored == 0
 
     def test_get_nonexistent(self, store):
         assert store.get("nonexistent") is None
@@ -66,10 +73,15 @@ class TestAddAndGet:
 
 class TestList:
     def test_list_all(self, store, embedder):
+        texts = [
+            "python asyncio concurrency patterns",
+            "javascript frontend rendering pipeline",
+            "database indexing and query plans",
+        ]
         records = [
             _make_learning(
                 embedder,
-                text=f"Learning {i}",
+                text=texts[i],
                 id=f"id-{i}",
                 timestamp=datetime(2025, 1, i + 1, tzinfo=UTC),
             )
@@ -131,8 +143,8 @@ class TestDedup:
         record1 = _make_learning(embedder, text="exact same text", id="first")
         record2 = _make_learning(embedder, text="exact same text", id="second")
         store.add([record1])
-        count = store.add([record2])
-        assert count == 0
+        result = store.add([record2])
+        assert result.stored == 0
         assert store.count() == 1
 
     def test_exact_text_with_quotes(self, store, embedder):
@@ -140,16 +152,40 @@ class TestDedup:
         record1 = _make_learning(embedder, text=text, id="q1")
         record2 = _make_learning(embedder, text=text, id="q2")
         store.add([record1])
-        count = store.add([record2])
-        assert count == 0
+        result = store.add([record2])
+        assert result.stored == 0
 
     def test_near_duplicate(self, store, embedder):
         record1 = _make_learning(embedder, text="test text", id="near-1")
         # Same vector (same text → same hash) but different id
         record2 = _make_learning(embedder, text="test text", id="near-2")
         store.add([record1])
-        count = store.add([record2])
-        assert count == 0
+        result = store.add([record2])
+        assert result.stored == 0
+
+    def test_near_duplicate_reports_match(self, store, embedder):
+        record1 = _make_learning(embedder, text="test text original", id="orig")
+        record2 = _make_learning(embedder, text="test text original", id="dup")
+        store.add([record1])
+        result = store.add([record2])
+        assert result.stored == 0
+        # Exact text match won't produce DuplicateInfo (it's caught before vector check)
+        # but near-vector match will. Use same vector, different text to test:
+
+    def test_near_duplicate_includes_matched_text(self, store, embedder):
+        """Near-duplicate rejection includes the matched learning's text."""
+        record1 = _make_learning(embedder, text="unique insight alpha", id="match-1")
+        store.add([record1])
+        # Same embedding (same text → same hash) but slightly different text
+        # We need same vector but different text to trigger _find_near_duplicate
+        vec = embedder.embed(["unique insight alpha"])[0]
+        record2 = _make_learning(embedder, text="different text", id="match-2")
+        record2["vector"] = vec  # Force same vector
+        result = store.add([record2])
+        assert result.stored == 0
+        assert len(result.duplicates) == 1
+        assert result.duplicates[0].matched_text == "unique insight alpha"
+        assert result.duplicates[0].similarity > 0.99
 
     def test_allows_dissimilar(self, store, embedder):
         record1 = _make_learning(
@@ -159,15 +195,27 @@ class TestDedup:
             embedder, text="unrelated subject regarding frontend rendering", id="d2"
         )
         store.add([record1])
-        count = store.add([record2])
-        assert count == 1
+        result = store.add([record2])
+        assert result.stored == 1
         assert store.count() == 2
 
-    def test_within_batch_dedup_on_empty_table(self, store, embedder):
+    def test_within_batch_exact_text_dedup(self, store, embedder):
         records = [_make_learning(embedder, text="same text", id=f"empty-{i}") for i in range(2)]
-        # Within-batch exact text dedup catches the duplicate even on empty table
-        count = store.add(records)
-        assert count == 1
+        result = store.add(records)
+        assert result.stored == 1
+
+    def test_within_batch_vector_dedup_on_empty_table(self, store, embedder):
+        """Near-duplicate vectors within a batch are caught even on empty table."""
+        vec = embedder.embed(["shared topic"])[0]
+        record1 = _make_learning(embedder, text="first version", id="batch-1")
+        record1["vector"] = vec
+        record2 = _make_learning(embedder, text="second version", id="batch-2")
+        record2["vector"] = vec  # Identical vector, different text
+        result = store.add([record1, record2])
+        assert result.stored == 1
+        assert len(result.duplicates) == 1
+        assert result.duplicates[0].new_text == "second version"
+        assert result.duplicates[0].matched_text == "first version"
 
 
 class TestDimensionHandling:

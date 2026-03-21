@@ -178,8 +178,8 @@ class TestAddLearningStorage:
         record = learning.model_dump(mode="python")
         record["vector"] = vectors[0]
 
-        stored = store.add([record])
-        assert stored == 1
+        result = store.add([record])
+        assert result.stored == 1
         assert store.count() == 1
 
     def test_duplicate_rejected(self, tmp_path):
@@ -199,7 +199,7 @@ class TestAddLearningStorage:
         record = learning.model_dump(mode="python")
         record["vector"] = vectors[0]
 
-        assert store.add([record]) == 1
+        assert store.add([record]).stored == 1
 
         # Same text again — should be rejected
         learning2 = Learning(
@@ -212,7 +212,7 @@ class TestAddLearningStorage:
         )
         record2 = learning2.model_dump(mode="python")
         record2["vector"] = vectors[0]
-        assert store.add([record2]) == 0
+        assert store.add([record2]).stored == 0
 
 
 # ---------------------------------------------------------------------------

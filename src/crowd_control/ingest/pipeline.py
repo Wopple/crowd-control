@@ -104,17 +104,17 @@ def ingest_session(
         embedder.dimensions,
         config.ingestion.dedup_threshold,
     )
-    stored_count = store.add(records)
+    add_result = store.add(records)
     logger.info(
         "Stored %d learnings (%d duplicates skipped)",
-        stored_count,
-        len(learnings) - stored_count,
+        add_result.stored,
+        len(learnings) - add_result.stored,
     )
 
     return IngestResult(
         session_id=session.session_id,
         segments_processed=len(session.segments),
         learnings_distilled=len(learnings),
-        learnings_stored=stored_count,
-        learnings_deduplicated=len(learnings) - stored_count,
+        learnings_stored=add_result.stored,
+        learnings_deduplicated=len(learnings) - add_result.stored,
     )

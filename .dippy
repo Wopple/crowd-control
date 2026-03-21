@@ -34,6 +34,7 @@ allow just run
 allow just build
 
 # uv
+allow uv run --extra ollama
 allow uv run crowd-control
 allow uv run pytest
 allow uv run python

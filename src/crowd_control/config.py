@@ -51,7 +51,7 @@ class RetrievalConfig:
 class IngestionConfig:
     auto_ingest: bool = True
     batch_size: int = 5
-    dedup_threshold: float = 0.95
+    dedup_threshold: float = 0.90
 
 
 @dataclass(frozen=True)

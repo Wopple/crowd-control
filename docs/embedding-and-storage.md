@@ -78,18 +78,49 @@ embedding models), it raises a clear error with backup and re-ingestion instruct
 
 ### Deduplication
 
-The `add()` method performs two-stage deduplication before inserting:
+The `add()` method performs multi-stage deduplication before inserting. It returns an
+`AddResult` with `stored` (count of inserted learnings) and `duplicates` (list of
+`DuplicateInfo` with `new_text`, `matched_text`, and `similarity` for each rejection).
+
+**Against existing DB rows** (skipped when table is empty):
 
 1. **Exact text match** — rejects learnings with identical text (SQL `WHERE` clause).
    Single quotes in text are escaped to prevent SQL injection.
 
-2. **Near-duplicate by embedding similarity** — searches for the closest vector using
-   cosine distance. If `_distance < (1.0 - dedup_threshold)`, the learning is rejected.
-   The default threshold of 0.95 means learnings with ≥ 95% cosine similarity are
-   considered duplicates.
+2. **Near-duplicate by embedding similarity** — `_find_near_duplicate()` searches for
+   the closest vector using cosine distance. If similarity ≥ `dedup_threshold`, the
+   learning is rejected. Returns the matched text and similarity for informative
+   rejection messages.
 
-Dedup queries are skipped entirely when the table is empty (first ingestion), since
-there's nothing to deduplicate against.
+**Within the current batch** (always active, including on empty tables):
+
+3. **Exact text dedup** — a `seen_texts` set catches identical text within the batch.
+
+4. **Near-duplicate by vector similarity** — each learning's vector is compared against
+   vectors of previously-accepted batch items using `_find_similar_in_batch()` (pure
+   cosine similarity in Python). This catches near-duplicates in the first ingestion
+   when the table is empty and DB-level dedup is skipped.
+
+### Dedup Threshold Calibration
+
+The default `dedup_threshold` is **0.90** (cosine similarity). This was determined
+empirically by analyzing 221 learnings embedded with `nomic-embed-text`:
+
+| Category | Similarity range | Examples |
+|----------|-----------------|----------|
+| True duplicates (tight paraphrases) | 0.91–0.95 | Same insight with minor wording changes |
+| **Threshold** | **0.90** | |
+| Distinct but related | 0.85–0.90 | Same topic, different insights |
+| Clearly different | < 0.85 | Different topics |
+
+The gap between the lowest true duplicate (0.9071) and the highest distinct pair
+(0.8970) is narrow, so 0.90 was chosen as the midpoint. This catches all observed
+duplicates while preserving genuinely distinct insights about similar topics.
+
+Synthetic test pairs confirmed: heavily-reworded versions of the same insight score
+0.70–0.89 (below threshold), while genuinely different insights about similar topics
+score 0.47–0.74 (well-separated). The real duplicates in the DB are tighter
+paraphrases than synthetically generated ones.
 
 **Cosine metric note:** LanceDB defaults to L2 distance. `.metric("cosine")` must be
 chained on every `.search()` call — it's a per-query setting, not a table property.
@@ -105,7 +136,7 @@ model = "nomic-embed-text"       # Model name for the provider
 # api_key_env = "VOYAGE_API_KEY" # Env var name for API key (API providers only)
 
 [ingestion]
-dedup_threshold = 0.95           # Cosine similarity threshold for near-duplicate rejection
+dedup_threshold = 0.90           # Cosine similarity threshold for near-duplicate rejection
 ```
 
 The database path is derived from `[general].storage_dir` (default `~/.crowd-control`),

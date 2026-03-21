@@ -17,7 +17,7 @@ def test_load_defaults_when_no_file(tmp_path):
     assert config.storage_dir == "~/.crowd-control"
     assert config.embedding.provider == "ollama"
     assert config.embedding.model == "nomic-embed-text"
-    assert config.ingestion.dedup_threshold == 0.95
+    assert config.ingestion.dedup_threshold == 0.90
 
 
 def test_load_partial_config(tmp_path):
@@ -28,7 +28,7 @@ def test_load_partial_config(tmp_path):
     assert config.embedding.model == "voyage-code-3"
     # Unspecified sections use defaults
     assert config.distillation.model == "haiku"
-    assert config.ingestion.dedup_threshold == 0.95
+    assert config.ingestion.dedup_threshold == 0.90
 
 
 def test_load_full_config(tmp_path):

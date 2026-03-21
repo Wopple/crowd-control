@@ -230,9 +230,16 @@ async def handle_add_learning(
     record = learning.model_dump(mode="python")
     record["vector"] = vectors[0]
 
-    stored = await asyncio.to_thread(store.add, [record])
+    add_result = await asyncio.to_thread(store.add, [record])
 
-    if stored == 0:
+    if add_result.stored == 0:
+        if add_result.duplicates:
+            dup = add_result.duplicates[0]
+            return (
+                f"Learning was not stored (duplicate detected, "
+                f"similarity={dup.similarity:.2f}).\n"
+                f"Existing: {dup.matched_text}"
+            )
         return "Learning was not stored (duplicate detected)."
 
     logger.info("add_learning: stored id=%s", learning.id)
