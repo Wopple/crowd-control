@@ -339,6 +339,64 @@ class TestVectorSearch:
         assert len(results) == 1
         assert results[0]["id"] == "is-s"
 
+    def test_tag_filter_single(self, store, embedder):
+        store.add(
+            [
+                _make_learning(embedder, text="python topic", id="tf-py", tags=["python"]),
+                _make_learning(embedder, text="javascript topic", id="tf-js", tags=["javascript"]),
+            ]
+        )
+        query_vec = embedder.embed(["topic"])[0]
+        results = store.vector_search(
+            query_vec, limit=5, min_similarity=0.0, scope="shared", tags=["python"]
+        )
+        ids = {r["id"] for r in results}
+        assert "tf-py" in ids
+        assert "tf-js" not in ids
+
+    def test_tag_filter_match_any(self, store, embedder):
+        store.add(
+            [
+                _make_learning(embedder, text="python topic", id="ma-py", tags=["python"]),
+                _make_learning(embedder, text="rust topic", id="ma-rs", tags=["rust"]),
+                _make_learning(embedder, text="go topic", id="ma-go", tags=["go"]),
+            ]
+        )
+        query_vec = embedder.embed(["topic"])[0]
+        results = store.vector_search(
+            query_vec, limit=5, min_similarity=0.0, scope="shared", tags=["python", "rust"]
+        )
+        ids = {r["id"] for r in results}
+        assert "ma-py" in ids
+        assert "ma-rs" in ids
+        assert "ma-go" not in ids
+
+    def test_tag_filter_case_insensitive(self, store, embedder):
+        store.add(
+            [
+                _make_learning(embedder, text="collision detection", id="ci-1", tags=["collision"]),
+            ]
+        )
+        query_vec = embedder.embed(["collision detection"])[0]
+        results = store.vector_search(
+            query_vec, limit=5, min_similarity=0.0, scope="shared", tags=["Collision"]
+        )
+        assert len(results) == 1
+        assert results[0]["id"] == "ci-1"
+
+    def test_tag_filter_none_returns_all(self, store, embedder):
+        store.add(
+            [
+                _make_learning(embedder, text="tagged item", id="tn-1", tags=["python"]),
+                _make_learning(embedder, text="untagged item", id="tn-2", tags=[]),
+            ]
+        )
+        query_vec = embedder.embed(["item"])[0]
+        results = store.vector_search(
+            query_vec, limit=5, min_similarity=0.0, scope="shared", tags=None
+        )
+        assert len(results) == 2
+
     def test_empty_table(self, store):
         query_vec = [0.1] * 8
         results = store.vector_search(query_vec, limit=5)

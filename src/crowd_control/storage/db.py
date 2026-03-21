@@ -254,6 +254,7 @@ class LearningStore:
         limit: int,
         min_similarity: float = 0.3,
         category: str | None = None,
+        tags: list[str] | None = None,
         exclude_stale: bool = True,
         scope: str = "project",
         current_project: str | None = None,
@@ -278,6 +279,13 @@ class LearningStore:
         if category is not None:
             escaped_cat = category.replace("'", "''")
             conditions.append(f"category = '{escaped_cat}'")
+
+        if tags:
+            tag_clauses = []
+            for tag in tags:
+                escaped_tag = tag.lower().replace("'", "''")
+                tag_clauses.append(f"array_contains(tags, '{escaped_tag}')")
+            conditions.append(f"({' OR '.join(tag_clauses)})")
 
         if exclude_stale:
             conditions.append("stale = false")

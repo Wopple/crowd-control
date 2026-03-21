@@ -81,12 +81,13 @@ mutable state sharing — LanceDB handles concurrent directory access safely.
 Searches past session learnings by semantic similarity. Calls the same `retrieve_learnings()`
 pipeline that the CLI uses — query embedding, vector search, ranking, dedup, token packing.
 
-| Parameter  | Type         | Required | Default        | Description |
-|------------|-------------|----------|----------------|-------------|
-| `query`    | `str`        | yes      | —              | Natural language search query |
-| `project`  | `str | None` | no       | `os.getcwd()`  | Filter to specific project |
-| `category` | `str | None` | no       | all categories | Filter by learning category |
-| `limit`    | `int | None` | no       | config default | Max results to return |
+| Parameter  | Type              | Required | Default        | Description |
+|------------|-------------------|----------|----------------|-------------|
+| `query`    | `str`             | yes      | —              | Natural language search query |
+| `project`  | `str | None`      | no       | `os.getcwd()`  | Filter to specific project |
+| `category` | `str | None`      | no       | all categories | Filter by learning category |
+| `tags`     | `list[str] | None`| no       | no tag filter  | Filter by tags (match-any, case-insensitive) |
+| `limit`    | `int | None`      | no       | config default | Max results to return |
 
 Returns formatted text with scored results, categories, retrieval counts, and ages.
 

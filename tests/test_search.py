@@ -101,6 +101,23 @@ class TestSearchLearnings:
         categories = {r.category for r in results.results}
         assert categories == {"gotcha"}
 
+    def test_tag_filtering(self, store, embedder):
+        insert_learning(store, embedder, "python async patterns", id="tf-py", tags=["python"])
+        insert_learning(store, embedder, "react component tips", id="tf-js", tags=["javascript"])
+
+        config = RetrievalConfig(min_similarity=0.0)
+        results = search_learnings(
+            query="coding patterns",
+            store=store,
+            embedder=embedder,
+            config=config,
+            scope="shared",
+            tags=["python"],
+        )
+        ids = {r.id for r in results.results}
+        assert "tf-py" in ids
+        assert "tf-js" not in ids
+
     def test_search_result_fields(self, store, embedder):
         """Verify all fields are populated on SearchResult."""
         insert_learning(

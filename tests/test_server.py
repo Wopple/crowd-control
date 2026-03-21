@@ -294,6 +294,47 @@ async def test_add_and_search_learning(server_deps):
 
 
 @pytest.mark.anyio
+async def test_search_with_tag_filter(server_deps):
+    """Tags filter narrows search results."""
+    await handle_add_learning(
+        server_deps,
+        text="Python asyncio event loop internals",
+        category="debugging_insight",
+        tags=["python", "async"],
+    )
+    await handle_add_learning(
+        server_deps,
+        text="React component lifecycle hooks",
+        category="pattern_discovery",
+        tags=["javascript", "react"],
+    )
+
+    result = await handle_search_learnings(
+        server_deps, query="programming patterns", tags=["python"]
+    )
+    assert "asyncio" in result
+    assert "React" not in result
+
+
+@pytest.mark.anyio
+async def test_add_learning_normalizes_tags(server_deps):
+    """Tags are lowercased on storage."""
+    result = await handle_add_learning(
+        server_deps,
+        text="LanceDB uses Arrow format internally",
+        category="architecture_decision",
+        tags=["LanceDB", "Arrow"],
+    )
+    assert "stored successfully" in result
+
+    # Search with lowercase tag should match
+    search_result = await handle_search_learnings(
+        server_deps, query="storage format", tags=["lancedb"]
+    )
+    assert "Arrow" in search_result
+
+
+@pytest.mark.anyio
 async def test_add_learning_invalid_category(server_deps):
     """Invalid category returns error, not exception."""
     result = await handle_add_learning(

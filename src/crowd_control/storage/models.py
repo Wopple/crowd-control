@@ -142,6 +142,11 @@ class Learning(BaseModel):
     stale: bool = False
     shared: bool = False
 
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, v: list[str]) -> list[str]:
+        return [tag.lower() for tag in v]
+
     @field_validator("text")
     @classmethod
     def validate_text_length(cls, v: str) -> str:

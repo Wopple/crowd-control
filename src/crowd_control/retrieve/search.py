@@ -64,6 +64,7 @@ def search_learnings(
     current_project: str | None = None,
     scope: Scope = "project",
     category: str | None = None,
+    tags: list[str] | None = None,
 ) -> SearchResults:
     """Search for learnings matching a query.
 
@@ -83,6 +84,7 @@ def search_learnings(
         limit=limit,
         min_similarity=config.min_similarity,
         category=category,
+        tags=tags,
         scope=scope,
         current_project=current_project,
     )

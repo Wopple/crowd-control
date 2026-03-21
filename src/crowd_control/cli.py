@@ -235,8 +235,9 @@ def list_cmd(ctx, project, category, limit):
 @click.option("--limit", default=None, type=int, help="Override max results.")
 @click.option("--project", default=None, help="Filter by project path.")
 @click.option("--category", default=None, help="Filter by category.")
+@click.option("--tag", "tags", multiple=True, help="Filter by tag (repeatable, match-any).")
 @click.pass_context
-def search(ctx, query, limit, project, category):
+def search(ctx, query, limit, project, category, tags):
     """Search learnings for a query."""
     import dataclasses
 
@@ -283,6 +284,7 @@ def search(ctx, query, limit, project, category):
         scope=config.knowledge.scope,
         current_project=current_project,
         category=category,
+        tags=list(tags) if tags else None,
     )
 
     _print_search_results(result, query)

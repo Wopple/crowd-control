@@ -60,6 +60,9 @@ Filtering is done at the database level via WHERE clauses:
 
 Additional filters:
 - `category` — optional, filters to a specific learning category
+- `tags` — optional list of tags, match-any semantics (OR). Uses `array_contains()`
+  in LanceDB's DuckDB SQL dialect. Tags are lowercased at search time to match the
+  normalized storage format.
 - `exclude_stale` — defaults to true, excludes `stale = true` learnings
 
 ### Distance-to-Similarity Conversion
@@ -198,5 +201,6 @@ Options:
 - `--limit N` — override max results
 - `--project PATH` — filter by project path
 - `--category CAT` — filter by learning category
+- `--tag TAG` — filter by tag (repeatable, match-any). Case-insensitive.
 
 

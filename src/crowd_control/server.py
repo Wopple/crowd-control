@@ -138,6 +138,7 @@ async def handle_search_learnings(
     query: str,
     project: str | None = None,
     category: str | None = None,
+    tags: list[str] | None = None,
     limit: int | None = None,
 ) -> str:
     """Search past session learnings by semantic similarity."""
@@ -167,6 +168,7 @@ async def handle_search_learnings(
             scope=deps.config.knowledge.scope,
             current_project=current_project,
             category=category,
+            tags=tags,
         )
     except EmbeddingError as e:
         return f"Embedding error during search: {e}"
@@ -316,6 +318,7 @@ def _register_tools(server: FastMCP) -> None:
         query: str,
         project: str | None = None,
         category: str | None = None,
+        tags: list[str] | None = None,
         limit: int | None = None,
         ctx: Context = None,
     ) -> str:
@@ -332,9 +335,13 @@ def _register_tools(server: FastMCP) -> None:
             category: Filter by learning category (e.g. 'debugging_insight',
                       'architecture_decision', 'gotcha', 'pattern_discovery',
                       'tool_usage', 'codebase_convention').
+            tags: Filter to learnings with any of the given tags (match-any).
+                  Tags are case-insensitive.
             limit: Maximum number of results (default: from config, typically 15).
         """
-        return await handle_search_learnings(_get_deps(ctx), query, project, category, limit)
+        return await handle_search_learnings(
+            _get_deps(ctx), query, project, category, tags, limit
+        )
 
     @server.tool()
     async def add_learning(

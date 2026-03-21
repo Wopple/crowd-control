@@ -38,6 +38,7 @@ def retrieve_learnings(
     scope: Scope = "project",
     current_project: str | None = None,
     category: str | None = None,
+    tags: list[str] | None = None,
 ) -> RetrievalResult:
     """Run the full search-and-rank pipeline.
 
@@ -53,6 +54,7 @@ def retrieve_learnings(
         current_project=current_project,
         scope=scope,
         category=category,
+        tags=tags,
     )
 
     ranked = rank_results(

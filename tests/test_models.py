@@ -262,6 +262,17 @@ class TestLearning:
                 confidence=0.8,
             )
 
+    def test_tags_normalized_to_lowercase(self):
+        l = Learning(
+            text="test",
+            category=LearningCategory.GOTCHA,
+            tags=["Python", "LanceDB", "ASYNC"],
+            project="/test",
+            session_id="s1",
+            confidence=0.8,
+        )
+        assert l.tags == ["python", "lancedb", "async"]
+
     def test_roundtrip(self):
         l = Learning(
             text="use is not None",
