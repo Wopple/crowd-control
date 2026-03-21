@@ -64,6 +64,7 @@ Learnings are stored in a single `learnings` table with this schema:
 | `git_sha` | string | Git HEAD at distillation time |
 | `timestamp` | timestamp(us, UTC) | When the learning was created |
 | `confidence` | float32 | Distiller's confidence score (0.0–1.0) |
+| `active_count` | int32 | Retrieval count (used by pruning) |
 | `stale` | bool | Marked stale (for future use) |
 | `shared` | bool | Cross-project learning (for future use) |
 
@@ -75,6 +76,24 @@ model. Switching models requires deleting and re-creating the database.
 When opening an existing table, `LearningStore` reads the vector dimension from the
 table schema. If a different `vector_dimensions` is passed (because the user switched
 embedding models), it raises a clear error with backup and re-ingestion instructions.
+
+### Schema Versioning
+
+The database tracks its schema version in a `_metadata` table (key-value pairs).
+When `LearningStore` opens an existing table, it compares the stored version to the
+code's expected version. If the stored version is behind, incremental migrations run
+automatically:
+
+- Each migration uses LanceDB's native `add_columns` / `alter_columns` APIs — no
+  drop-and-recreate.
+- Version is updated after each successful step. A partial failure leaves the DB at
+  the last successful version.
+- Migrations are idempotent: safe to re-run if interrupted.
+- For pre-migration databases (no `_metadata` table), the system assumes version 1
+  and creates the metadata table on first access.
+
+Migration logic lives in `storage/migration.py`. The migration registry
+(`_MIGRATIONS`) is empty until the schema changes from v1.
 
 ### Deduplication
 

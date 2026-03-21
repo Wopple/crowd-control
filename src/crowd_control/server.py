@@ -143,8 +143,7 @@ def _require_store(deps: ServerDeps) -> LearningStore:
     """Return the store or raise a ValueError."""
     if deps.store is None:
         raise ValueError(
-            "Learnings database not available. "
-            "Run `crowd-control ingest` to initialize."
+            "Learnings database not available. Run `crowd-control ingest` to initialize."
         )
     return deps.store
 
@@ -380,9 +379,7 @@ def _register_tools(server: FastMCP) -> None:
                   tool to see available tags.
             limit: Maximum number of results (default: from config, typically 15).
         """
-        return await handle_search_learnings(
-            _get_deps(ctx), query, project, category, tags, limit
-        )
+        return await handle_search_learnings(_get_deps(ctx), query, project, category, tags, limit)
 
     @server.tool()
     async def add_learning(

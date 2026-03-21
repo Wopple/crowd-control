@@ -44,9 +44,18 @@ class TestExportLearnings:
         assert len(result) == 1
         record = result[0]
         expected_fields = {
-            "id", "text", "category", "tags", "project",
-            "session_id", "git_sha", "timestamp", "confidence",
-            "active_count", "stale", "shared",
+            "id",
+            "text",
+            "category",
+            "tags",
+            "project",
+            "session_id",
+            "git_sha",
+            "timestamp",
+            "confidence",
+            "active_count",
+            "stale",
+            "shared",
         }
         assert expected_fields.issubset(record.keys())
 

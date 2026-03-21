@@ -25,8 +25,9 @@ class TestInteractiveMode:
 
         logger = _get_logger()
         stream_handlers = [
-            h for h in logger.handlers if isinstance(h, logging.StreamHandler)
-            and not isinstance(h, logging.FileHandler)
+            h
+            for h in logger.handlers
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
         ]
         assert len(stream_handlers) == 1
         assert stream_handlers[0].level == logging.INFO
@@ -37,8 +38,9 @@ class TestInteractiveMode:
 
         logger = _get_logger()
         stream_handlers = [
-            h for h in logger.handlers if isinstance(h, logging.StreamHandler)
-            and not isinstance(h, logging.FileHandler)
+            h
+            for h in logger.handlers
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
         ]
         assert len(stream_handlers) == 0
 
@@ -50,8 +52,9 @@ class TestVerbose:
 
         logger = _get_logger()
         stream_handlers = [
-            h for h in logger.handlers if isinstance(h, logging.StreamHandler)
-            and not isinstance(h, logging.FileHandler)
+            h
+            for h in logger.handlers
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
         ]
         assert len(stream_handlers) == 1
         assert stream_handlers[0].level == logging.DEBUG
@@ -63,9 +66,7 @@ class TestFileHandler:
         configure_logging(config, interactive=False)
 
         logger = _get_logger()
-        file_handlers = [
-            h for h in logger.handlers if isinstance(h, logging.FileHandler)
-        ]
+        file_handlers = [h for h in logger.handlers if isinstance(h, logging.FileHandler)]
         assert len(file_handlers) == 1
         assert file_handlers[0].level == logging.DEBUG
 
@@ -74,9 +75,7 @@ class TestFileHandler:
         configure_logging(config, interactive=False)
 
         logger = _get_logger()
-        file_handlers = [
-            h for h in logger.handlers if isinstance(h, logging.FileHandler)
-        ]
+        file_handlers = [h for h in logger.handlers if isinstance(h, logging.FileHandler)]
         assert len(file_handlers) == 0
 
     def test_file_handler_creates_log_file(self, tmp_path):

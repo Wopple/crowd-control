@@ -80,8 +80,11 @@ scope = "shared"
     assert config.retrieval.hotness_weight == 0.3
     assert config.retrieval.project_boost == 2.0
     assert config.ingestion == IngestionConfig(
-        auto_ingest=False, batch_size=3, dedup_threshold=0.9,
-        max_age_days=60, retention_retrieval_interval_days=15,
+        auto_ingest=False,
+        batch_size=3,
+        dedup_threshold=0.9,
+        max_age_days=60,
+        retention_retrieval_interval_days=15,
     )
     assert config.knowledge.scope == "shared"
 

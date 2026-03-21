@@ -250,16 +250,25 @@ class TestPrune:
         store.add(
             [
                 _make_learning(
-                    embedder, text="old inactive", id="old-0",
-                    timestamp=datetime(2025, 1, 1, tzinfo=UTC), active_count=0,
+                    embedder,
+                    text="old inactive",
+                    id="old-0",
+                    timestamp=datetime(2025, 1, 1, tzinfo=UTC),
+                    active_count=0,
                 ),
                 _make_learning(
-                    embedder, text="old well retrieved", id="old-6",
-                    timestamp=datetime(2025, 1, 1, tzinfo=UTC), active_count=6,
+                    embedder,
+                    text="old well retrieved",
+                    id="old-6",
+                    timestamp=datetime(2025, 1, 1, tzinfo=UTC),
+                    active_count=6,
                 ),
                 _make_learning(
-                    embedder, text="recent inactive", id="new-0",
-                    timestamp=datetime(2025, 5, 20, tzinfo=UTC), active_count=0,
+                    embedder,
+                    text="recent inactive",
+                    id="new-0",
+                    timestamp=datetime(2025, 5, 20, tzinfo=UTC),
+                    active_count=0,
                 ),
             ]
         )
@@ -278,18 +287,27 @@ class TestPrune:
             [
                 # 91 days old: needs ceil(91/30) = 4, has 3 → pruned
                 _make_learning(
-                    embedder, text="barely old learning", id="age-91",
-                    timestamp=datetime(2025, 4, 1, tzinfo=UTC), active_count=3,
+                    embedder,
+                    text="barely old learning",
+                    id="age-91",
+                    timestamp=datetime(2025, 4, 1, tzinfo=UTC),
+                    active_count=3,
                 ),
                 # 181 days old: needs ceil(181/30) = 7, has 5 → pruned
                 _make_learning(
-                    embedder, text="very old learning", id="age-181",
-                    timestamp=datetime(2025, 1, 1, tzinfo=UTC), active_count=5,
+                    embedder,
+                    text="very old learning",
+                    id="age-181",
+                    timestamp=datetime(2025, 1, 1, tzinfo=UTC),
+                    active_count=5,
                 ),
                 # 181 days old: needs 7, has 7 → survives
                 _make_learning(
-                    embedder, text="very old active learning", id="age-181-ok",
-                    timestamp=datetime(2025, 1, 1, tzinfo=UTC), active_count=7,
+                    embedder,
+                    text="very old active learning",
+                    id="age-181-ok",
+                    timestamp=datetime(2025, 1, 1, tzinfo=UTC),
+                    active_count=7,
                 ),
             ]
         )
@@ -303,8 +321,11 @@ class TestPrune:
         store.add(
             [
                 _make_learning(
-                    embedder, text="ancient learning", id="ancient",
-                    timestamp=datetime(2020, 1, 1, tzinfo=UTC), active_count=0,
+                    embedder,
+                    text="ancient learning",
+                    id="ancient",
+                    timestamp=datetime(2020, 1, 1, tzinfo=UTC),
+                    active_count=0,
                 ),
             ]
         )
@@ -321,8 +342,11 @@ class TestPrune:
         store.add(
             [
                 _make_learning(
-                    embedder, text="recent learning", id="recent",
-                    timestamp=datetime(2025, 5, 1, tzinfo=UTC), active_count=0,
+                    embedder,
+                    text="recent learning",
+                    id="recent",
+                    timestamp=datetime(2025, 5, 1, tzinfo=UTC),
+                    active_count=0,
                 ),
             ]
         )
@@ -370,14 +394,22 @@ class TestIncrementActiveCount:
 class TestDistinctTags:
     def test_returns_sorted_unique_tags(self, store, embedder):
         """Tags from multiple learnings are deduplicated and sorted."""
-        store.add([
-            _make_learning(embedder, text="python async patterns", id="dt-1",
-                           tags=["python", "async"]),
-            _make_learning(embedder, text="react component tips", id="dt-2",
-                           tags=["javascript", "react"]),
-            _make_learning(embedder, text="python testing strategies", id="dt-3",
-                           tags=["python", "testing"]),
-        ])
+        store.add(
+            [
+                _make_learning(
+                    embedder, text="python async patterns", id="dt-1", tags=["python", "async"]
+                ),
+                _make_learning(
+                    embedder, text="react component tips", id="dt-2", tags=["javascript", "react"]
+                ),
+                _make_learning(
+                    embedder,
+                    text="python testing strategies",
+                    id="dt-3",
+                    tags=["python", "testing"],
+                ),
+            ]
+        )
         tags = store.distinct_tags()
         assert tags == ["async", "javascript", "python", "react", "testing"]
 
@@ -387,9 +419,11 @@ class TestDistinctTags:
 
     def test_learnings_with_no_tags(self, store, embedder):
         """Learnings with empty tag lists don't contribute to distinct tags."""
-        store.add([
-            _make_learning(embedder, text="untagged insight", id="dt-4", tags=[]),
-        ])
+        store.add(
+            [
+                _make_learning(embedder, text="untagged insight", id="dt-4", tags=[]),
+            ]
+        )
         assert store.distinct_tags() == []
 
 

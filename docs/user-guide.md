@@ -8,6 +8,7 @@ Crowd Control.
 - [Installation](#installation)
 - [CLI Commands](#cli-commands)
 - [Configuration](#configuration)
+- [Upgrading](#upgrading)
 - [How It Works](#how-it-works)
 - [Verifying Your Installation](#verifying-your-installation)
 - [Debugging](#debugging)
@@ -555,6 +556,44 @@ dedup_threshold = 0.90
 max_age_days = 90
 retention_retrieval_interval_days = 30
 ```
+
+---
+
+## Upgrading
+
+### How to upgrade
+
+```bash
+# If installed with uv
+uv tool upgrade crowd-control
+
+# If installed with pip
+pip install --upgrade crowd-control
+```
+
+### What happens on upgrade
+
+When you run any Crowd Control command after upgrading, the system checks your
+database schema version and automatically applies any necessary migrations. Your
+existing learnings are preserved — no manual steps required.
+
+### Recommended: back up before upgrading
+
+While migrations are designed to be safe, backing up your database before a major
+upgrade is always a good idea:
+
+```bash
+cp -r ~/.crowd-control/db ~/.crowd-control/db.bak
+```
+
+### If something goes wrong
+
+1. Restore from your backup:
+   ```bash
+   rm -rf ~/.crowd-control/db
+   mv ~/.crowd-control/db.bak ~/.crowd-control/db
+   ```
+2. File an issue at the project repository with the error message.
 
 ---
 

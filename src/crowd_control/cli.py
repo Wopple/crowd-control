@@ -356,8 +356,10 @@ def prune(ctx, dry_run):
         if not candidates:
             click.echo("No learnings eligible for pruning.")
         else:
-            click.echo(f"Would prune {len(candidates)} learnings "
-                        f"(older than {max_age} days, < 1 retrieval per {interval} days):")
+            click.echo(
+                f"Would prune {len(candidates)} learnings "
+                f"(older than {max_age} days, < 1 retrieval per {interval} days):"
+            )
             for c in candidates[:10]:
                 click.echo(f"  [{c.category}] {c.text[:80]}...")
             if len(candidates) > 10:
@@ -365,8 +367,9 @@ def prune(ctx, dry_run):
         return
 
     pruned = store.prune(max_age, interval)
-    click.echo(f"Pruned {pruned} learnings (older than {max_age} days, "
-                f"< 1 retrieval per {interval} days).")
+    click.echo(
+        f"Pruned {pruned} learnings (older than {max_age} days, < 1 retrieval per {interval} days)."
+    )
 
 
 @main.command()

@@ -46,7 +46,9 @@ def parse_session_file(path: Path) -> Session:
 
     logger.debug(
         "Parsed %d lines from %s (file size: %d bytes)",
-        len(raw_lines), path, path.stat().st_size,
+        len(raw_lines),
+        path,
+        path.stat().st_size,
     )
 
     metadata = extract_session_metadata(raw_lines)

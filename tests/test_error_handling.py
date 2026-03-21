@@ -30,9 +30,7 @@ class TestCreateEmbedderWrapsExceptions:
         config = EmbeddingConfig(provider="voyage")
         # Create a fake module whose VoyageEmbedder raises ValueError
         fake_module = ModuleType("crowd_control.embed.voyage")
-        fake_module.VoyageEmbedder = MagicMock(
-            side_effect=ValueError("Voyage API key not found")
-        )
+        fake_module.VoyageEmbedder = MagicMock(side_effect=ValueError("Voyage API key not found"))
         with patch.dict("sys.modules", {"crowd_control.embed.voyage": fake_module}):
             with pytest.raises(EmbeddingError, match="API key not found"):
                 create_embedder(config)

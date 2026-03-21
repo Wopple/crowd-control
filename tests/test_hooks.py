@@ -175,7 +175,10 @@ class TestSpawnWorker:
     def test_uses_build_worker_command(self, config):
         with (
             patch("crowd_control.hooks.subprocess.Popen") as mock_popen,
-            patch("crowd_control.hooks._build_worker_command", return_value=["/usr/bin/crowd-control", "worker"]),
+            patch(
+                "crowd_control.hooks._build_worker_command",
+                return_value=["/usr/bin/crowd-control", "worker"],
+            ),
         ):
             spawn_worker(config)
 

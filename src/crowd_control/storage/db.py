@@ -12,6 +12,8 @@ import lancedb
 import pyarrow as pa
 import pyarrow.compute as pc
 
+from crowd_control.storage.migration import run_migrations, stamp_initial_version
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,6 +44,7 @@ class AddResult:
 
     stored: int
     duplicates: list[DuplicateInfo] = field(default_factory=list)
+
 
 _TABLE_NAME = "learnings"
 
@@ -102,14 +105,16 @@ def _find_prunable(
         required = _required_active_count(age_days, retrieval_interval_days)
         active = row.get("active_count", 0)
         if active < required:
-            prunable.append(PruneCandidate(
-                id=row["id"],
-                text=row.get("text", ""),
-                category=row.get("category", ""),
-                age_days=age_days,
-                active_count=active,
-                required_count=required,
-            ))
+            prunable.append(
+                PruneCandidate(
+                    id=row["id"],
+                    text=row.get("text", ""),
+                    category=row.get("category", ""),
+                    age_days=age_days,
+                    active_count=active,
+                    required_count=required,
+                )
+            )
     return prunable
 
 
@@ -163,6 +168,7 @@ class LearningStore:
         self._db = lancedb.connect(str(expanded))
 
         if _TABLE_NAME in self._db.list_tables().tables:
+            run_migrations(self._db, _TABLE_NAME)
             self._table = self._db.open_table(_TABLE_NAME)
             existing_dims = _get_vector_dim_from_schema(self._table.schema)
             if vector_dimensions is not None and vector_dimensions != existing_dims:
@@ -184,6 +190,7 @@ class LearningStore:
             self._vector_dimensions = vector_dimensions
             schema = _make_schema(vector_dimensions)
             self._table = self._db.create_table(_TABLE_NAME, schema=schema)
+            stamp_initial_version(self._db)
 
     def add(self, learnings: list[dict]) -> AddResult:
         """Insert learnings into the table with deduplication.
@@ -228,14 +235,10 @@ class LearningStore:
                     continue
 
             # Near-duplicate dedup: within batch (covers empty table case too)
-            batch_match = _find_similar_in_batch(
-                vector, accepted_vectors, self._dedup_threshold
-            )
+            batch_match = _find_similar_in_batch(vector, accepted_vectors, self._dedup_threshold)
             if batch_match is not None:
                 matched_idx, similarity = batch_match
-                duplicates.append(
-                    DuplicateInfo(text, to_insert[matched_idx]["text"], similarity)
-                )
+                duplicates.append(DuplicateInfo(text, to_insert[matched_idx]["text"], similarity))
                 logger.debug(
                     "dedup: rejected within batch (sim=%.3f): %.80s",
                     similarity,
@@ -351,10 +354,7 @@ class LearningStore:
             return []
 
         arrow_table = (
-            self._table.search()
-            .select(["tags"])
-            .limit(self._table.count_rows())
-            .to_arrow()
+            self._table.search().select(["tags"]).limit(self._table.count_rows()).to_arrow()
         )
         flat = pc.list_flatten(arrow_table.column("tags"))
         unique = flat.unique().to_pylist()
@@ -442,9 +442,7 @@ class LearningStore:
         if now is None:
             now = datetime.now(UTC)
 
-        prunable = self._fetch_prune_candidates(
-            max_age_days, retrieval_interval_days, now
-        )
+        prunable = self._fetch_prune_candidates(max_age_days, retrieval_interval_days, now)
 
         if dry_run:
             return prunable
