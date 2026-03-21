@@ -41,7 +41,7 @@ def rank_results(
 
     scored = _score_results(results, config, current_project, scope, now)
     deduped = _deduplicate(scored)
-    packed = _pack_to_budget(deduped, config.max_tokens, config.max_results)
+    packed = _pack_to_budget(deduped, config.max_tokens, config.max_results, config.min_score)
     return packed
 
 
@@ -143,18 +143,25 @@ def _deduplicate(results: list[RankedResult], threshold: float = 0.85) -> list[R
 
 
 def _pack_to_budget(
-    results: list[RankedResult], max_tokens: int, max_results: int
+    results: list[RankedResult],
+    max_tokens: int,
+    max_results: int,
+    min_score: float = 0.0,
 ) -> list[RankedResult]:
-    """Pack results into a token budget, stopping at max_results.
+    """Pack results into a token budget, stopping at max_results or min_score.
 
     Uses len(text) / 4 as a rough token estimate. Walks the sorted results
-    and includes as many as fit within both the token budget and result cap.
+    and includes as many as fit within the token budget, result cap, and
+    minimum score threshold. Since results are sorted by score descending,
+    the first result below min_score means all remaining are also below.
     """
     packed: list[RankedResult] = []
     tokens_used = 0
 
     for result in results:
         if len(packed) >= max_results:
+            break
+        if result.final_score < min_score:
             break
         est_tokens = len(result.text) / 4
         if tokens_used + est_tokens > max_tokens:
@@ -163,11 +170,12 @@ def _pack_to_budget(
         tokens_used += est_tokens
 
     logger.debug(
-        "pack_to_budget: %d/%d results, ~%d/%d tokens",
+        "pack_to_budget: %d/%d results, ~%d/%d tokens, min_score=%.2f",
         len(packed),
         len(results),
         int(tokens_used),
         max_tokens,
+        min_score,
     )
 
     return packed

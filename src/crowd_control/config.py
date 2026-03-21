@@ -34,7 +34,8 @@ class DistillationConfig:
 class RetrievalConfig:
     max_results: int = 15
     max_tokens: int = 4000
-    min_similarity: float = 0.3
+    min_similarity: float = 0.4
+    min_score: float = 0.4
     recency_half_life_days: float = 7.0
     hotness_weight: float = 0.2
     project_boost: float = 1.5

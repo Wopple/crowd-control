@@ -97,7 +97,8 @@ def test_retrieval_defaults():
     assert config.project_boost == 1.5
     assert config.max_results == 15
     assert config.max_tokens == 4000
-    assert config.min_similarity == 0.3
+    assert config.min_similarity == 0.4
+    assert config.min_score == 0.4
 
 
 def test_retrieval_half_life_zero_raises():

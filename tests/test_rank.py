@@ -297,6 +297,41 @@ class TestTokenPacking:
         packed = _pack_to_budget(results, max_tokens=100000, max_results=3)
         assert len(packed) == 3
 
+    def test_stops_at_min_score(self):
+        results = [
+            RankedResult(
+                id=str(i),
+                text="short",
+                category="a",
+                tags=[],
+                project="/p",
+                similarity=0.9,
+                hotness=0.5,
+                final_score=0.9 - i * 0.2,
+            )
+            for i in range(5)
+        ]
+        # Scores: 0.9, 0.7, 0.5, 0.3, 0.1 — min_score=0.4 should keep 3
+        packed = _pack_to_budget(results, max_tokens=100000, max_results=100, min_score=0.4)
+        assert len(packed) == 3
+        assert all(r.final_score >= 0.4 for r in packed)
+
+    def test_min_score_zero_disables(self):
+        results = [
+            RankedResult(
+                id="low",
+                text="short",
+                category="a",
+                tags=[],
+                project="/p",
+                similarity=0.1,
+                hotness=0.1,
+                final_score=0.1,
+            )
+        ]
+        packed = _pack_to_budget(results, max_tokens=100000, max_results=100, min_score=0.0)
+        assert len(packed) == 1
+
     def test_empty(self):
         assert _pack_to_budget([], max_tokens=1000, max_results=10) == []
 

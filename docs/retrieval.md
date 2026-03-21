@@ -71,7 +71,7 @@ LanceDB cosine distance is `1 - cosine_similarity`. The search converts this:
 ```
 similarity = 1.0 - distance
 ```
-Results below `min_similarity` (default 0.3) are filtered out.
+Results below `min_similarity` (default 0.4) are filtered out.
 
 ## Ranking Module
 
@@ -140,9 +140,15 @@ O(n²) but n is small (typically 30–100).
 ### Token Packing
 
 After dedup, results are packed into the token budget using `len(text) / 4` as a
-rough token estimate. Results are walked in score order; the packer stops when
-either `max_tokens` (default 4000) or `max_results` (default 15) is reached,
-avoiding unnecessary iteration over remaining candidates.
+rough token estimate. Results are walked in score order; the packer stops when any
+of three limits is reached:
+- `max_results` (default 15) — hard cap on result count
+- `max_tokens` (default 4000) — token budget
+- `min_score` (default 0.4) — minimum final score threshold. Since results are
+  sorted by score descending, the first result below this threshold terminates
+  packing (all remaining are also below).
+
+This prevents low-scoring noise from consuming result slots or token budget.
 
 ### Data Model Hierarchy
 
@@ -171,7 +177,8 @@ single query, then applies individual updates.
 |-----------|---------|-------------|
 | `max_results` | `15` | Maximum learnings returned |
 | `max_tokens` | `4000` | Token budget for packed results |
-| `min_similarity` | `0.3` | Minimum cosine similarity threshold |
+| `min_similarity` | `0.4` | Minimum cosine similarity for vector search (pre-ranking) |
+| `min_score` | `0.4` | Minimum final score after ranking (post-ranking) |
 | `recency_half_life_days` | `7.0` | Exponential decay half-life in days |
 | `hotness_weight` | `0.2` | Blend weight: 0.0 = pure semantic, 1.0 = pure hotness |
 | `project_boost` | `1.5` | Multiplicative boost for same-project results |
