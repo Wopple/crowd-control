@@ -111,6 +111,15 @@ def ingest_session(
         len(learnings) - add_result.stored,
     )
 
+    # 5. Prune old learnings
+    if config.ingestion.max_age_days > 0:
+        pruned = store.prune(
+            config.ingestion.max_age_days,
+            config.ingestion.retention_retrieval_interval_days,
+        )
+        if pruned > 0:
+            logger.info("Pruned %d old learnings", pruned)
+
     return IngestResult(
         session_id=session.session_id,
         segments_processed=len(session.segments),

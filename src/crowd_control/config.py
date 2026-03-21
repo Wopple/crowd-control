@@ -52,6 +52,8 @@ class IngestionConfig:
     auto_ingest: bool = True
     batch_size: int = 5
     dedup_threshold: float = 0.90
+    max_age_days: int = 90
+    retention_retrieval_interval_days: int = 30
 
 
 @dataclass(frozen=True)

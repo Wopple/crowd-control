@@ -18,6 +18,8 @@ def test_load_defaults_when_no_file(tmp_path):
     assert config.embedding.provider == "ollama"
     assert config.embedding.model == "nomic-embed-text"
     assert config.ingestion.dedup_threshold == 0.90
+    assert config.ingestion.max_age_days == 90
+    assert config.ingestion.retention_retrieval_interval_days == 30
 
 
 def test_load_partial_config(tmp_path):
@@ -59,6 +61,8 @@ project_boost = 2.0
 auto_ingest = false
 batch_size = 3
 dedup_threshold = 0.9
+max_age_days = 60
+retention_retrieval_interval_days = 15
 
 [knowledge]
 scope = "shared"
@@ -75,7 +79,10 @@ scope = "shared"
     assert config.retrieval.recency_half_life_days == 14.0
     assert config.retrieval.hotness_weight == 0.3
     assert config.retrieval.project_boost == 2.0
-    assert config.ingestion == IngestionConfig(auto_ingest=False, batch_size=3, dedup_threshold=0.9)
+    assert config.ingestion == IngestionConfig(
+        auto_ingest=False, batch_size=3, dedup_threshold=0.9,
+        max_age_days=60, retention_retrieval_interval_days=15,
+    )
     assert config.knowledge.scope == "shared"
 
 

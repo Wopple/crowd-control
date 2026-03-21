@@ -327,6 +327,59 @@ def export(ctx, output, project, category):
 
 
 @main.command()
+@click.option("--dry-run", is_flag=True, help="Show what would be pruned without deleting.")
+@click.pass_context
+def prune(ctx, dry_run):
+    """Remove old learnings with low retrieval activity."""
+    config = _get_config_or_exit(ctx)
+
+    try:
+        from crowd_control.storage.db import LearningStore
+
+        store = LearningStore(config.db_path)
+    except Exception as e:
+        click.echo(f"Database not available: {e}", err=True)
+        sys.exit(1)
+
+    max_age = config.ingestion.max_age_days
+    interval = config.ingestion.retention_retrieval_interval_days
+
+    if max_age <= 0:
+        click.echo("Pruning is disabled (max_age_days = 0).")
+        return
+
+    if dry_run:
+        from datetime import timedelta
+
+        from crowd_control.storage.db import _find_prunable_ids
+
+        now = datetime.now(UTC)
+        cutoff = now - timedelta(days=max_age)
+        cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        where = f"timestamp < timestamp '{cutoff_str}'"
+        candidates = store._table.search().where(where).limit(store.count()).to_list()
+        prunable = _find_prunable_ids(candidates, interval, now)
+        if not prunable:
+            click.echo("No learnings eligible for pruning.")
+        else:
+            prunable_set = set(prunable)
+            click.echo(f"Would prune {len(prunable)} learnings "
+                        f"(older than {max_age} days, < 1 retrieval per {interval} days):")
+            shown = 0
+            for row in candidates:
+                if row["id"] in prunable_set and shown < 10:
+                    click.echo(f"  [{row['category']}] {row['text'][:80]}...")
+                    shown += 1
+            if len(prunable) > 10:
+                click.echo(f"  ... and {len(prunable) - 10} more")
+        return
+
+    pruned = store.prune(max_age, interval)
+    click.echo(f"Pruned {pruned} learnings (older than {max_age} days, "
+                f"< 1 retrieval per {interval} days).")
+
+
+@main.command()
 def serve():
     """Run the MCP server (stdio transport)."""
     from crowd_control.server import run_server

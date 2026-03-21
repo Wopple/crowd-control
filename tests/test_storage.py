@@ -242,6 +242,95 @@ class TestDimensionHandling:
             LearningStore(str(tmp_path / "empty_db"))
 
 
+class TestPrune:
+    def test_deletes_old_inactive_learnings(self, store, embedder):
+        """Old learning with 0 retrievals is pruned; old with enough is kept."""
+        now = datetime(2025, 6, 1, tzinfo=UTC)
+        # 151 days old: needs ceil(151/30) = 6 retrievals
+        store.add(
+            [
+                _make_learning(
+                    embedder, text="old inactive", id="old-0",
+                    timestamp=datetime(2025, 1, 1, tzinfo=UTC), active_count=0,
+                ),
+                _make_learning(
+                    embedder, text="old well retrieved", id="old-6",
+                    timestamp=datetime(2025, 1, 1, tzinfo=UTC), active_count=6,
+                ),
+                _make_learning(
+                    embedder, text="recent inactive", id="new-0",
+                    timestamp=datetime(2025, 5, 20, tzinfo=UTC), active_count=0,
+                ),
+            ]
+        )
+        # interval=30: 151-day-old needs 6, so active_count=6 survives, 0 doesn't
+        pruned = store.prune(max_age_days=90, retrieval_interval_days=30, now=now)
+        assert pruned == 1
+        assert store.count() == 2
+        assert store.get("old-0") is None
+        assert store.get("old-6") is not None
+        assert store.get("new-0") is not None
+
+    def test_required_count_scales_with_age(self, store, embedder):
+        """Older learnings need proportionally more retrievals."""
+        now = datetime(2025, 7, 1, tzinfo=UTC)
+        store.add(
+            [
+                # 91 days old: needs ceil(91/30) = 4, has 3 → pruned
+                _make_learning(
+                    embedder, text="barely old learning", id="age-91",
+                    timestamp=datetime(2025, 4, 1, tzinfo=UTC), active_count=3,
+                ),
+                # 181 days old: needs ceil(181/30) = 7, has 5 → pruned
+                _make_learning(
+                    embedder, text="very old learning", id="age-181",
+                    timestamp=datetime(2025, 1, 1, tzinfo=UTC), active_count=5,
+                ),
+                # 181 days old: needs 7, has 7 → survives
+                _make_learning(
+                    embedder, text="very old active learning", id="age-181-ok",
+                    timestamp=datetime(2025, 1, 1, tzinfo=UTC), active_count=7,
+                ),
+            ]
+        )
+        pruned = store.prune(max_age_days=90, retrieval_interval_days=30, now=now)
+        assert pruned == 2
+        assert store.get("age-91") is None
+        assert store.get("age-181") is None
+        assert store.get("age-181-ok") is not None
+
+    def test_zero_max_age_disables_pruning(self, store, embedder):
+        store.add(
+            [
+                _make_learning(
+                    embedder, text="ancient learning", id="ancient",
+                    timestamp=datetime(2020, 1, 1, tzinfo=UTC), active_count=0,
+                ),
+            ]
+        )
+        pruned = store.prune(max_age_days=0, retrieval_interval_days=30)
+        assert pruned == 0
+        assert store.count() == 1
+
+    def test_empty_table(self, store):
+        pruned = store.prune(max_age_days=90, retrieval_interval_days=30)
+        assert pruned == 0
+
+    def test_nothing_to_prune(self, store, embedder):
+        now = datetime(2025, 6, 1, tzinfo=UTC)
+        store.add(
+            [
+                _make_learning(
+                    embedder, text="recent learning", id="recent",
+                    timestamp=datetime(2025, 5, 1, tzinfo=UTC), active_count=0,
+                ),
+            ]
+        )
+        pruned = store.prune(max_age_days=90, retrieval_interval_days=30, now=now)
+        assert pruned == 0
+        assert store.count() == 1
+
+
 class TestIncrementActiveCount:
     def test_single(self, store, embedder):
         store.add([_make_learning(embedder, id="inc-1")])

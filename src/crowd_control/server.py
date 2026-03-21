@@ -49,6 +49,16 @@ async def _default_lifespan(server: FastMCP) -> AsyncIterator[ServerDeps]:
         logger.warning("LearningStore unavailable: no existing DB and no embedder")
 
     logger.info("Lifespan: store=%s, embedder=%s", store is not None, embedder is not None)
+
+    if store is not None and config.ingestion.max_age_days > 0:
+        pruned = await asyncio.to_thread(
+            store.prune,
+            config.ingestion.max_age_days,
+            config.ingestion.retention_retrieval_interval_days,
+        )
+        if pruned > 0:
+            logger.info("Startup prune: removed %d old learnings", pruned)
+
     yield ServerDeps(config=config, store=store, embedder=embedder)
 
 

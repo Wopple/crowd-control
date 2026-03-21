@@ -333,6 +333,25 @@ The worker:
 
 ---
 
+### `crowd-control prune`
+
+Removes old learnings with low retrieval activity.
+
+```bash
+crowd-control prune              # Delete old inactive learnings
+crowd-control prune --dry-run    # Preview what would be pruned
+```
+
+Uses `max_age_days` (default 90) and `retention_retrieval_interval_days` (default 30)
+from the `[ingestion]` config section. A learning older than `max_age_days` must have
+been retrieved at least once per interval to survive. For example, a 120-day-old
+learning with a 30-day interval needs 4 retrievals to be kept.
+
+This also runs automatically after each ingestion and on MCP server startup, so manual
+pruning is rarely needed.
+
+---
+
 ### `crowd-control serve`
 
 Starts the MCP server using stdio transport. This is called by Claude Code automatically
@@ -449,10 +468,17 @@ Tuning tips:
 |-------|------|---------|-------------|
 | `auto_ingest` | bool | `true` | Automatically ingest sessions via SessionEnd hook |
 | `batch_size` | int | `5` | Embedding batch size |
-| `dedup_threshold` | float | `0.95` | Cosine similarity threshold for near-duplicate rejection |
+| `dedup_threshold` | float | `0.90` | Cosine similarity threshold for near-duplicate rejection |
+| `max_age_days` | int | `90` | Delete learnings older than this (0 = never prune) |
+| `retention_retrieval_interval_days` | int | `30` | Must be retrieved once per this many days to survive past TTL |
 
 With auto-ingestion disabled, the SessionEnd hook will not queue sessions. Use
 `crowd-control ingest` to ingest manually.
+
+Pruning runs automatically after each ingestion and on MCP server startup. Learnings
+older than `max_age_days` must have been retrieved at least once per
+`retention_retrieval_interval_days` — the required count scales with age (e.g., 90 days
+old / 30 day interval = 3 retrievals needed). Set `max_age_days = 0` to disable pruning.
 
 ### Configuration examples
 
@@ -515,7 +541,8 @@ max_learnings_per_session = 20
 [retrieval]
 max_results = 15
 max_tokens = 4000
-min_similarity = 0.3
+min_similarity = 0.4
+min_score = 0.4
 recency_half_life_days = 7
 hotness_weight = 0.2
 project_boost = 1.5
@@ -523,7 +550,9 @@ project_boost = 1.5
 [ingestion]
 auto_ingest = true
 batch_size = 5
-dedup_threshold = 0.95
+dedup_threshold = 0.90
+max_age_days = 90
+retention_retrieval_interval_days = 30
 ```
 
 ---

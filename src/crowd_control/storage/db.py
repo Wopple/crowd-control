@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import lancedb
@@ -57,6 +57,40 @@ def _get_vector_dim_from_schema(schema: pa.Schema) -> int:
     """Extract vector dimensionality from an existing table's schema."""
     vector_field = schema.field("vector")
     return vector_field.type.list_size
+
+
+def _required_active_count(age_days: float, interval_days: int) -> int:
+    """Minimum retrievals required for a learning of the given age.
+
+    Returns ceil(age_days / interval_days), minimum 1.
+    """
+    if interval_days <= 0:
+        return 0
+    return max(1, math.ceil(age_days / interval_days))
+
+
+def _find_prunable_ids(
+    candidates: list[dict],
+    retrieval_interval_days: int,
+    now: datetime,
+) -> list[str]:
+    """Identify learnings that haven't been retrieved enough for their age.
+
+    Pure function: takes raw rows from LanceDB, returns IDs to delete.
+    """
+    ids: list[str] = []
+    for row in candidates:
+        ts = row.get("timestamp")
+        if ts is None:
+            continue
+        if not isinstance(ts, datetime):
+            ts = ts.to_pydatetime()
+        age_days = max(0.0, (now - ts).total_seconds() / 86400.0)
+        required = _required_active_count(age_days, retrieval_interval_days)
+        active = row.get("active_count", 0)
+        if active < required:
+            ids.append(row["id"])
+    return ids
 
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -314,6 +348,61 @@ class LearningStore:
         if similarity >= self._dedup_threshold:
             return results[0]["text"], similarity
         return None
+
+    def prune(
+        self,
+        max_age_days: int,
+        retrieval_interval_days: int,
+        now: datetime | None = None,
+    ) -> int:
+        """Delete old learnings with insufficient retrieval activity.
+
+        A learning older than max_age_days survives only if it has been
+        retrieved at least once per retrieval_interval_days over its lifetime.
+        The required count scales with age: a 90-day-old learning with a
+        30-day interval needs 3 retrievals, a 120-day-old needs 4, etc.
+
+        This gives active learnings an extended life, but not an indefinite
+        one — they must keep proving their value as they age.
+
+        Returns the count of deleted learnings. If max_age_days is 0,
+        pruning is disabled (returns 0).
+        """
+        if max_age_days <= 0:
+            return 0
+
+        if self._table.count_rows() == 0:
+            return 0
+
+        if now is None:
+            now = datetime.now(UTC)
+
+        cutoff = now - timedelta(days=max_age_days)
+        cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
+        # Fetch all learnings past the age threshold
+        where = f"timestamp < timestamp '{cutoff_str}'"
+        candidates = self._table.search().where(where).limit(self._table.count_rows()).to_list()
+
+        if not candidates:
+            return 0
+
+        ids_to_delete = _find_prunable_ids(candidates, retrieval_interval_days, now)
+
+        if not ids_to_delete:
+            return 0
+
+        escaped_ids = [lid.replace("'", "''") for lid in ids_to_delete]
+        id_list = ", ".join(f"'{eid}'" for eid in escaped_ids)
+        self._table.delete(f"id IN ({id_list})")
+
+        logger.info(
+            "prune: deleted %d/%d learnings older than %d days",
+            len(ids_to_delete),
+            len(candidates),
+            max_age_days,
+        )
+        return len(ids_to_delete)
 
     def increment_active_count(self, learning_ids: list[str]) -> None:
         """Increment active_count by 1 for each learning ID.

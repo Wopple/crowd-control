@@ -137,6 +137,8 @@ model = "nomic-embed-text"       # Model name for the provider
 
 [ingestion]
 dedup_threshold = 0.90           # Cosine similarity threshold for near-duplicate rejection
+max_age_days = 90                # Prune learnings older than this (0 = never prune)
+retention_retrieval_interval_days = 30  # Must be retrieved once per this many days to survive
 ```
 
 The database path is derived from `[general].storage_dir` (default `~/.crowd-control`),
@@ -150,6 +152,7 @@ The pipeline (`ingest/pipeline.py`) orchestrates the full flow:
 2. **Distill** — `distill_session(session, ...)` → `list[Learning]`
 3. **Embed** — `embedder.embed([l.text for l in learnings])` → vectors
 4. **Store** — `LearningStore.add(records)` with dedup
+5. **Prune** — `LearningStore.prune()` removes old low-activity learnings
 
 If distillation returns zero learnings, the pipeline exits early without creating
 an embedder or touching the database.
@@ -169,6 +172,16 @@ Runs the full pipeline. Without `--dry-run`, it parses, distills, embeds, and st
 ### `crowd-control list [--project P] [--category C] [--limit N]`
 
 Lists stored learnings with optional filtering. Results ordered by timestamp descending.
+
+### `crowd-control prune [--dry-run]`
+
+Removes old learnings with insufficient retrieval activity. A learning older than
+`max_age_days` must have been retrieved at least once per
+`retention_retrieval_interval_days` to survive (e.g., a 120-day-old learning with a
+30-day interval needs 4 retrievals). With `--dry-run`, shows what would be pruned
+without deleting.
+
+Pruning also runs automatically after each ingestion and on MCP server startup.
 
 ### `crowd-control status`
 
