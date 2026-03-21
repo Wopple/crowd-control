@@ -15,6 +15,18 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class PruneCandidate:
+    """A learning identified as eligible for pruning."""
+
+    id: str
+    text: str
+    category: str
+    age_days: float
+    active_count: int
+    required_count: int
+
+
+@dataclass
 class DuplicateInfo:
     """Details about a learning rejected as a near-duplicate."""
 
@@ -69,16 +81,16 @@ def _required_active_count(age_days: float, interval_days: int) -> int:
     return max(1, math.ceil(age_days / interval_days))
 
 
-def _find_prunable_ids(
+def _find_prunable(
     candidates: list[dict],
     retrieval_interval_days: int,
     now: datetime,
-) -> list[str]:
+) -> list[PruneCandidate]:
     """Identify learnings that haven't been retrieved enough for their age.
 
-    Pure function: takes raw rows from LanceDB, returns IDs to delete.
+    Pure function: takes raw rows from LanceDB, returns prunable candidates.
     """
-    ids: list[str] = []
+    prunable: list[PruneCandidate] = []
     for row in candidates:
         ts = row.get("timestamp")
         if ts is None:
@@ -89,8 +101,15 @@ def _find_prunable_ids(
         required = _required_active_count(age_days, retrieval_interval_days)
         active = row.get("active_count", 0)
         if active < required:
-            ids.append(row["id"])
-    return ids
+            prunable.append(PruneCandidate(
+                id=row["id"],
+                text=row.get("text", ""),
+                category=row.get("category", ""),
+                age_days=age_days,
+                active_count=active,
+                required_count=required,
+            ))
+    return prunable
 
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -349,12 +368,31 @@ class LearningStore:
             return results[0]["text"], similarity
         return None
 
+    def _fetch_prune_candidates(
+        self,
+        max_age_days: int,
+        retrieval_interval_days: int,
+        now: datetime,
+    ) -> list[PruneCandidate]:
+        """Find learnings eligible for pruning without deleting them."""
+        cutoff = now - timedelta(days=max_age_days)
+        cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
+        where = f"timestamp < timestamp '{cutoff_str}'"
+        rows = self._table.search().where(where).limit(self._table.count_rows()).to_list()
+
+        if not rows:
+            return []
+
+        return _find_prunable(rows, retrieval_interval_days, now)
+
     def prune(
         self,
         max_age_days: int,
         retrieval_interval_days: int,
         now: datetime | None = None,
-    ) -> int:
+        dry_run: bool = False,
+    ) -> int | list[PruneCandidate]:
         """Delete old learnings with insufficient retrieval activity.
 
         A learning older than max_age_days survives only if it has been
@@ -365,41 +403,42 @@ class LearningStore:
         This gives active learnings an extended life, but not an indefinite
         one — they must keep proving their value as they age.
 
-        Returns the count of deleted learnings. If max_age_days is 0,
-        pruning is disabled (returns 0).
+        Args:
+            max_age_days: Learnings older than this are candidates. 0 disables.
+            retrieval_interval_days: Required retrieval frequency.
+            now: Current time (for testing). Defaults to UTC now.
+            dry_run: If True, return list of PruneCandidate without deleting.
+
+        Returns:
+            Count of deleted learnings, or list of PruneCandidate if dry_run.
         """
         if max_age_days <= 0:
-            return 0
+            return [] if dry_run else 0
 
         if self._table.count_rows() == 0:
-            return 0
+            return [] if dry_run else 0
 
         if now is None:
             now = datetime.now(UTC)
 
-        cutoff = now - timedelta(days=max_age_days)
-        cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        prunable = self._fetch_prune_candidates(
+            max_age_days, retrieval_interval_days, now
+        )
 
-        # Fetch all learnings past the age threshold
-        where = f"timestamp < timestamp '{cutoff_str}'"
-        candidates = self._table.search().where(where).limit(self._table.count_rows()).to_list()
+        if dry_run:
+            return prunable
 
-        if not candidates:
+        if not prunable:
             return 0
 
-        ids_to_delete = _find_prunable_ids(candidates, retrieval_interval_days, now)
-
-        if not ids_to_delete:
-            return 0
-
+        ids_to_delete = [c.id for c in prunable]
         escaped_ids = [lid.replace("'", "''") for lid in ids_to_delete]
         id_list = ", ".join(f"'{eid}'" for eid in escaped_ids)
         self._table.delete(f"id IN ({id_list})")
 
         logger.info(
-            "prune: deleted %d/%d learnings older than %d days",
+            "prune: deleted %d learnings older than %d days",
             len(ids_to_delete),
-            len(candidates),
             max_age_days,
         )
         return len(ids_to_delete)

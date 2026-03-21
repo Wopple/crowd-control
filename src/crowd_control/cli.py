@@ -349,29 +349,16 @@ def prune(ctx, dry_run):
         return
 
     if dry_run:
-        from datetime import timedelta
-
-        from crowd_control.storage.db import _find_prunable_ids
-
-        now = datetime.now(UTC)
-        cutoff = now - timedelta(days=max_age)
-        cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%S+00:00")
-        where = f"timestamp < timestamp '{cutoff_str}'"
-        candidates = store._table.search().where(where).limit(store.count()).to_list()
-        prunable = _find_prunable_ids(candidates, interval, now)
-        if not prunable:
+        candidates = store.prune(max_age, interval, dry_run=True)
+        if not candidates:
             click.echo("No learnings eligible for pruning.")
         else:
-            prunable_set = set(prunable)
-            click.echo(f"Would prune {len(prunable)} learnings "
+            click.echo(f"Would prune {len(candidates)} learnings "
                         f"(older than {max_age} days, < 1 retrieval per {interval} days):")
-            shown = 0
-            for row in candidates:
-                if row["id"] in prunable_set and shown < 10:
-                    click.echo(f"  [{row['category']}] {row['text'][:80]}...")
-                    shown += 1
-            if len(prunable) > 10:
-                click.echo(f"  ... and {len(prunable) - 10} more")
+            for c in candidates[:10]:
+                click.echo(f"  [{c.category}] {c.text[:80]}...")
+            if len(candidates) > 10:
+                click.echo(f"  ... and {len(candidates) - 10} more")
         return
 
     pruned = store.prune(max_age, interval)

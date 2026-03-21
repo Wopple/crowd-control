@@ -446,7 +446,8 @@ Provider comparison:
 |-------|------|---------|-------------|
 | `max_results` | int | `15` | Maximum learnings returned per search |
 | `max_tokens` | int | `4000` | Token budget for packed results |
-| `min_similarity` | float | `0.3` | Minimum cosine similarity threshold (0.0–1.0) |
+| `min_similarity` | float | `0.4` | Minimum cosine similarity for vector search (pre-ranking) |
+| `min_score` | float | `0.4` | Minimum final score after ranking (post-ranking) |
 | `recency_half_life_days` | float | `7.0` | Exponential decay half-life in days |
 | `hotness_weight` | float | `0.2` | Blend weight: 0.0 = pure semantic, 1.0 = pure hotness |
 | `project_boost` | float | `1.5` | Multiplicative boost for same-project results in non-project scopes |
