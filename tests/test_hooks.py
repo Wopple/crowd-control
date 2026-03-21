@@ -9,7 +9,14 @@ from unittest.mock import patch
 import pytest
 
 from crowd_control.config import CrowdControlConfig, IngestionConfig
-from crowd_control.hooks import _build_worker_command, handle_session_end_hook, spawn_worker
+from crowd_control.hooks import (
+    _CREATE_NEW_PROCESS_GROUP,
+    _DETACHED_PROCESS,
+    _build_worker_command,
+    _detach_kwargs,
+    handle_session_end_hook,
+    spawn_worker,
+)
 
 
 @pytest.fixture
@@ -156,12 +163,14 @@ class TestSpawnWorker:
         call_kwargs = mock_popen.call_args[1]
         assert "CLAUDECODE" not in call_kwargs["env"]
 
-    def test_detached(self, config):
+    def test_detached_uses_platform_kwargs(self, config):
         with patch("crowd_control.hooks.subprocess.Popen") as mock_popen:
             spawn_worker(config)
 
         call_kwargs = mock_popen.call_args[1]
-        assert call_kwargs["start_new_session"] is True
+        expected = _detach_kwargs()
+        for key, value in expected.items():
+            assert call_kwargs[key] == value
 
     def test_uses_build_worker_command(self, config):
         with (
@@ -190,3 +199,21 @@ class TestBuildWorkerCommand:
             cmd = _build_worker_command()
 
         assert cmd[1:] == ["-m", "crowd_control", "worker"]
+
+
+class TestDetachKwargs:
+    def test_posix_uses_start_new_session(self, monkeypatch):
+        monkeypatch.setattr("crowd_control.hooks.os.name", "posix")
+        assert _detach_kwargs() == {"start_new_session": True}
+
+    def test_windows_uses_creationflags(self, monkeypatch):
+        monkeypatch.setattr("crowd_control.hooks.os.name", "nt")
+        result = _detach_kwargs()
+        assert "creationflags" in result
+        flags = result["creationflags"]
+        assert flags & _CREATE_NEW_PROCESS_GROUP
+        assert flags & _DETACHED_PROCESS
+
+    def test_no_start_new_session_on_windows(self, monkeypatch):
+        monkeypatch.setattr("crowd_control.hooks.os.name", "nt")
+        assert "start_new_session" not in _detach_kwargs()

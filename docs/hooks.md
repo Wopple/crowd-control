@@ -63,6 +63,13 @@ crowd-control worker   # Process all queued jobs, then exit
 4. On failure: increments attempt count in queue file
 5. After 3 failures: moves queue file to `~/.crowd-control/queue/failed/`
 
+### Platform-specific detachment
+
+On POSIX systems (macOS, Linux), the worker is detached via ``start_new_session``
+(``setsid(2)``). On Windows, the equivalent ``CREATE_NEW_PROCESS_GROUP`` and
+``DETACHED_PROCESS`` creation flags are used instead. This branching is isolated
+in ``_detach_kwargs()`` so the rest of ``spawn_worker`` is platform-agnostic.
+
 ### CLAUDECODE environment variable
 
 The worker calls `claude -p` for distillation. Claude Code sets a `CLAUDECODE`

@@ -23,6 +23,11 @@ logger = logging.getLogger(__name__)
 
 _MAX_SESSION_ID_LENGTH = 200
 
+# Windows process creation flags, defined here because the subprocess
+# module only exposes these constants on Windows.
+_CREATE_NEW_PROCESS_GROUP = 0x00000200
+_DETACHED_PROCESS = 0x00000008
+
 
 @dataclass
 class QueueResult:
@@ -104,6 +109,19 @@ def handle_session_end_hook(
     )
 
 
+def _detach_kwargs() -> dict[str, object]:
+    """Return Popen kwargs to fully detach the child process.
+
+    On POSIX, ``start_new_session`` calls setsid(2).
+    On Windows, creation flags detach from the parent console.
+    """
+    if os.name == "nt":
+        return {
+            "creationflags": _CREATE_NEW_PROCESS_GROUP | _DETACHED_PROCESS,
+        }
+    return {"start_new_session": True}
+
+
 def _build_worker_command() -> list[str]:
     """Build the command to invoke the worker subprocess.
 
@@ -136,10 +154,10 @@ def spawn_worker(config: CrowdControlConfig) -> bool:
             proc = subprocess.Popen(
                 _build_worker_command(),
                 env=worker_env,
-                start_new_session=True,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=stderr_file,
+                **_detach_kwargs(),
             )
             # Detach: this is a fire-and-forget background worker.
             # Explicitly clear the returncode so Python does not emit

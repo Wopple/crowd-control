@@ -25,6 +25,14 @@ allow git stash
 allow git status
 allow git worktree
 
+# just
+allow just install
+allow just test
+allow just lint
+allow just fmt
+allow just run
+allow just build
+
 # uv
 allow uv run crowd-control
 allow uv run pytest
