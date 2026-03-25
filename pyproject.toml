@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "crowd-control"
-version = "0.0.4"
+version = "0.0.5"
 description = "Learnings retention system for Claude Code"
 readme = "README.md"
 license = "MIT"

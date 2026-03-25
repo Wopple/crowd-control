@@ -294,6 +294,100 @@ def search(ctx, query, limit, project, category, tags):
 
 
 @main.command()
+@click.argument("text")
+@click.option(
+    "--category",
+    default="pattern_discovery",
+    show_default=True,
+    help="Learning category.",
+)
+@click.option("--tag", "tags", multiple=True, help="Tag (repeatable).")
+@click.option("--project", default=None, help="Project path (defaults to cwd).")
+@click.pass_context
+def add(ctx, text, category, tags, project):
+    """Add a learning manually."""
+    from pydantic import ValidationError
+
+    from crowd_control.embed.base import EmbeddingError, create_embedder
+    from crowd_control.storage.db import LearningStore
+    from crowd_control.storage.models import Learning, LearningCategory
+
+    config = _get_config_or_exit(ctx)
+
+    # 1. Validate category
+    try:
+        validated_category = LearningCategory(category)
+    except ValueError:
+        valid = [c.value for c in LearningCategory]
+        click.echo(
+            f"Invalid category '{category}'. Must be one of: {', '.join(valid)}",
+            err=True,
+        )
+        sys.exit(1)
+
+    # 2. Create embedder
+    try:
+        embedder = create_embedder(config.embedding)
+    except Exception as e:
+        click.echo(f"Embedding provider error: {e}", err=True)
+        click.echo(
+            f"Is your embedding provider ({config.embedding.provider}) running?",
+            err=True,
+        )
+        sys.exit(1)
+
+    # 3. Open store (bootstraps DB if needed)
+    try:
+        store = LearningStore(config.db_path, embedder.dimensions)
+    except ValueError as e:
+        click.echo(f"Database error: {e}", err=True)
+        sys.exit(1)
+
+    # 4. Build Learning
+    current_project = project or _detect_project()
+    try:
+        learning = Learning(
+            text=text,
+            category=validated_category,
+            tags=list(tags) if tags else [],
+            project=current_project,
+            session_id="manual",
+            confidence=1.0,
+        )
+    except ValidationError as e:
+        click.echo(f"Invalid learning: {e}", err=True)
+        sys.exit(1)
+
+    # 5. Embed
+    try:
+        vectors = embedder.embed([learning.text])
+    except EmbeddingError as e:
+        click.echo(f"Embedding error: {e}", err=True)
+        sys.exit(1)
+
+    # 6. Store
+    record = learning.model_dump(mode="python")
+    record["vector"] = vectors[0]
+    add_result = store.add([record])
+
+    if add_result.stored == 0:
+        if add_result.duplicates:
+            dup = add_result.duplicates[0]
+            click.echo(
+                f"Learning was not stored (duplicate detected, "
+                f"similarity={dup.similarity:.2f}).",
+                err=True,
+            )
+            click.echo(f"Existing: {dup.matched_text}", err=True)
+        else:
+            click.echo("Learning was not stored (duplicate detected).", err=True)
+        sys.exit(1)
+
+    logger.info("add: stored id=%s", learning.id)
+    click.echo(f"Learning stored (id={learning.id}).")
+
+
+@main.command()
 @click.option("--output", "-o", default=None, type=click.Path(), help="Output file path.")
 @click.option("--project", default=None, help="Filter by project path.")
 @click.option("--category", default=None, help="Filter by category.")

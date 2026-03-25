@@ -30,3 +30,20 @@ def test_search_command_exists():
     assert "--limit" in result.output
     assert "--project" in result.output
     assert "--category" in result.output
+
+
+def test_add_command_exists():
+    runner = CliRunner()
+    result = runner.invoke(main, ["add", "--help"])
+    assert result.exit_code == 0
+    assert "TEXT" in result.output
+    assert "--category" in result.output
+    assert "--tag" in result.output
+    assert "--project" in result.output
+
+
+def test_add_invalid_category():
+    runner = CliRunner()
+    result = runner.invoke(main, ["add", "some text", "--category", "bogus"])
+    assert result.exit_code != 0
+    assert "Invalid category" in result.output

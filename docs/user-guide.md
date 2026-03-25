@@ -254,6 +254,41 @@ Learning categories: `architecture_decision`, `debugging_insight`, `pattern_disc
 
 ---
 
+### `crowd-control add TEXT`
+
+Manually store a learning with optional category and tags.
+
+```bash
+crowd-control add "Always check for None before accessing .timestamp"
+crowd-control add "LanceDB dedup threshold is sensitive to embedding quality" \
+    --category gotcha \
+    --tag lancedb --tag embeddings
+crowd-control add "Auth middleware must run before CORS" \
+    --category architecture_decision \
+    --tag auth --tag middleware \
+    --project /Users/you/code/webapp
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `TEXT` | *(required)* | The learning text — a single, self-contained insight |
+| `--category` | `pattern_discovery` | Learning category (see list below) |
+| `--tag` | *(none)* | Tag for the learning (repeatable) |
+| `--project` | current directory | Project to associate the learning with |
+
+Categories: `architecture_decision`, `debugging_insight`, `pattern_discovery`,
+`tool_usage`, `codebase_convention`, `gotcha`.
+
+Output on success:
+
+```
+Learning stored (id=abc123).
+```
+
+If the learning is too similar to one already stored, it is rejected as a duplicate.
+
+---
+
 ### `crowd-control list`
 
 Lists stored learnings with optional filtering.
@@ -654,6 +689,69 @@ Generic programming knowledge is filtered out — only project-specific insights
     ├── worker.err           # Worker stderr (always written)
     └── crowd-control.log    # Trace log (when log_level != "off")
 ```
+
+---
+
+## Curating Learnings Manually
+
+You can add learnings by hand instead of (or in addition to) relying on automatic
+extraction. This is useful if you want full control over what the agent remembers,
+or if you're running in manual-only mode with auto-ingestion disabled.
+
+### Adding learnings
+
+Use the CLI or the MCP tool during a session:
+
+```bash
+# From the terminal
+crowd-control add "The payment service retries are capped at 3 with exponential backoff" \
+    --category architecture_decision \
+    --tag payments --tag retry
+
+# From within a Claude Code session (the agent calls the MCP tool)
+# add_learning(text="...", category="...", tags=["payments", "retry"])
+```
+
+### Choosing a category
+
+Pick the category that best describes what kind of insight this is:
+
+| Category | When to use | Example |
+|----------|------------|---------|
+| `architecture_decision` | You chose X over Y, and future work should know why | "We use event sourcing for the order service because we need a full audit trail" |
+| `debugging_insight` | You found a root cause or diagnostic technique | "Stale DNS cache in the k8s pod causes intermittent 503s — restart CoreDNS" |
+| `pattern_discovery` | You found an approach that works well here | "Wrapping LanceDB writes in a retry loop handles transient lock conflicts" |
+| `tool_usage` | A flag, config, or workflow trick that's worth remembering | "Use `claude -p --model haiku` for fast distillation, not sonnet" |
+| `codebase_convention` | A project-specific rule others should follow | "All API handlers return Result<T, AppError>, never raise exceptions" |
+| `gotcha` | Something surprising that will bite you if you forget | "The dedup threshold of 0.95 rejects near-duplicates even with minor rephrasing" |
+
+When in doubt, `pattern_discovery` is a good default.
+
+### Tagging effectively
+
+Tags help narrow search results. The `search_learnings` tool and `crowd-control search`
+both support `--tag` filtering, so good tags make retrieval more precise.
+
+- **Use technology or library names:** `lancedb`, `react`, `sqlalchemy`, `docker`
+- **Use areas of the codebase:** `auth`, `api`, `migrations`, `billing`
+- **Keep them lowercase:** Tags are normalized to lowercase automatically, but being
+  consistent in your input avoids confusion
+- **Prefer a few specific tags over many generic ones:** `lancedb` and `embeddings` are
+  more useful than `database` and `code` — generic tags match too many results
+
+### Writing effective learning text
+
+Learnings are matched by semantic similarity, so how you write them affects how well
+they're found later.
+
+- **Self-contained:** The text should make sense on its own, without needing the
+  surrounding conversation for context
+- **Project-specific:** Don't store generic programming knowledge ("Python lists are
+  mutable"). Focus on insights specific to this codebase or its particular stack
+- **Include the why:** "We use connection pooling" is less useful than "We use
+  connection pooling because the payment gateway has a 10-connection limit per client"
+- **Keep it concise:** 1-3 sentences. Longer text embeds less precisely and wastes
+  tokens in search results
 
 ---
 
