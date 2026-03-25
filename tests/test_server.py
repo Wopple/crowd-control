@@ -405,6 +405,42 @@ async def test_search_empty_db(server_deps):
 
 
 @pytest.mark.anyio
+async def test_ingest_session_blocked_by_agent_ingest(tmp_path):
+    """Ingest tool returns early message when agent_ingest is disabled."""
+    from crowd_control.config import IngestionConfig
+
+    config = CrowdControlConfig(
+        storage_dir=str(tmp_path),
+        ingestion=IngestionConfig(agent_ingest=False),
+    )
+    embedder = FakeEmbedder(dimensions=8)
+    store = LearningStore(config.db_path, vector_dimensions=8)
+    deps = ServerDeps(config=config, store=store, embedder=embedder)
+
+    result = await handle_ingest_session(deps, session_path="/some/file.jsonl")
+    assert "disabled" in result
+    assert "add_learning" in result
+
+
+@pytest.mark.anyio
+async def test_status_includes_ingestion_flags(tmp_path):
+    """Status output shows auto_ingest and agent_ingest settings."""
+    from crowd_control.config import IngestionConfig
+
+    config = CrowdControlConfig(
+        storage_dir=str(tmp_path),
+        ingestion=IngestionConfig(auto_ingest=False, agent_ingest=False),
+    )
+    embedder = FakeEmbedder(dimensions=8)
+    store = LearningStore(config.db_path, vector_dimensions=8)
+    deps = ServerDeps(config=config, store=store, embedder=embedder)
+
+    text = await handle_status(deps)
+    assert "Auto-ingest: disabled" in text
+    assert "Agent ingest: disabled" in text
+
+
+@pytest.mark.anyio
 async def test_registered_tools():
     """Verify all expected tools are registered on a created server."""
     server = create_server()

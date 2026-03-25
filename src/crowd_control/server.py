@@ -261,6 +261,14 @@ async def handle_ingest_session(
     session_path: str | None = None,
 ) -> str:
     """Ingest a Claude Code session transcript to extract and store learnings."""
+    if not deps.config.ingestion.agent_ingest:
+        logger.info("ingest_session: blocked by agent_ingest=false")
+        return (
+            "Agent-initiated ingestion is disabled. Use `add_learning` to store "
+            "learnings manually, or set `agent_ingest = true` in "
+            "~/.crowd-control/config.toml to enable."
+        )
+
     from pathlib import Path
 
     from crowd_control.ingest.parser import find_sessions
@@ -303,6 +311,9 @@ async def handle_ingest_session(
 
 async def handle_status(deps: ServerDeps) -> str:
     """Show the learnings database status and configuration."""
+    auto_ingest = "enabled" if deps.config.ingestion.auto_ingest else "disabled"
+    agent_ingest = "enabled" if deps.config.ingestion.agent_ingest else "disabled"
+
     if deps.store is None:
         return (
             f"Database: {deps.config.db_path} (not initialized)\n"
@@ -310,6 +321,8 @@ async def handle_status(deps: ServerDeps) -> str:
             f"Embedding: {deps.config.embedding.provider}/{deps.config.embedding.model}"
             f" (unavailable)\n"
             f"Scope: {deps.config.knowledge.scope}\n"
+            f"Auto-ingest: {auto_ingest}\n"
+            f"Agent ingest: {agent_ingest}\n"
             f"Retrieval: max_results={deps.config.retrieval.max_results}, "
             f"max_tokens={deps.config.retrieval.max_tokens}"
         )
@@ -332,6 +345,8 @@ async def handle_status(deps: ServerDeps) -> str:
         f"Tags: {tag_str}\n"
         f"Embedding: {embedder_status}\n"
         f"Scope: {deps.config.knowledge.scope}\n"
+        f"Auto-ingest: {auto_ingest}\n"
+        f"Agent ingest: {agent_ingest}\n"
         f"Retrieval: max_results={deps.config.retrieval.max_results}, "
         f"max_tokens={deps.config.retrieval.max_tokens}"
     )

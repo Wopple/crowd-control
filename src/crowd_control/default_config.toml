@@ -27,5 +27,6 @@ project_boost = 1.5
 
 [ingestion]
 auto_ingest = true
+agent_ingest = true                 # Allow agents to trigger ingestion via MCP tool
 batch_size = 5
 dedup_threshold = 0.95              # Cosine similarity threshold for near-duplicate rejection

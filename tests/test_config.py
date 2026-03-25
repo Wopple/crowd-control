@@ -17,6 +17,8 @@ def test_load_defaults_when_no_file(tmp_path):
     assert config.storage_dir == "~/.crowd-control"
     assert config.embedding.provider == "ollama"
     assert config.embedding.model == "nomic-embed-text"
+    assert config.ingestion.auto_ingest is True
+    assert config.ingestion.agent_ingest is True
     assert config.ingestion.dedup_threshold == 0.90
     assert config.ingestion.max_age_days == 90
     assert config.ingestion.retention_retrieval_interval_days == 30
@@ -59,6 +61,7 @@ project_boost = 2.0
 
 [ingestion]
 auto_ingest = false
+agent_ingest = false
 batch_size = 3
 dedup_threshold = 0.9
 max_age_days = 60
@@ -81,6 +84,7 @@ scope = "shared"
     assert config.retrieval.project_boost == 2.0
     assert config.ingestion == IngestionConfig(
         auto_ingest=False,
+        agent_ingest=False,
         batch_size=3,
         dedup_threshold=0.9,
         max_age_days=60,
