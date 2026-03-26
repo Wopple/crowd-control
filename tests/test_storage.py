@@ -137,6 +137,30 @@ class TestCount:
         store.delete("1")
         assert store.count() == 1
 
+    def test_count_with_project_filter(self, store, embedder):
+        store.add(
+            [
+                _make_learning(embedder, text="alpha", id="ca-1", project="/proj/a"),
+                _make_learning(embedder, text="bravo", id="ca-2", project="/proj/a"),
+                _make_learning(embedder, text="charlie", id="cb-1", project="/proj/b"),
+            ]
+        )
+        assert store.count(project="/proj/a") == 2
+        assert store.count(project="/proj/b") == 1
+
+    def test_count_none_returns_total(self, store, embedder):
+        store.add(
+            [
+                _make_learning(embedder, text="alpha", id="ct-1", project="/proj/a"),
+                _make_learning(embedder, text="bravo", id="ct-2", project="/proj/b"),
+            ]
+        )
+        assert store.count() == 2
+
+    def test_count_project_no_match(self, store, embedder):
+        store.add([_make_learning(embedder, text="alpha", id="cn-1", project="/proj/a")])
+        assert store.count(project="/nonexistent") == 0
+
 
 class TestDedup:
     def test_exact_text(self, store, embedder):
@@ -425,6 +449,62 @@ class TestDistinctTags:
             ]
         )
         assert store.distinct_tags() == []
+
+    def test_distinct_tags_filtered_by_project(self, store, embedder):
+        store.add(
+            [
+                _make_learning(
+                    embedder,
+                    text="python async",
+                    id="dtf-1",
+                    tags=["python", "async"],
+                    project="/proj/a",
+                ),
+                _make_learning(
+                    embedder,
+                    text="react tips",
+                    id="dtf-2",
+                    tags=["javascript"],
+                    project="/proj/b",
+                ),
+            ]
+        )
+        assert store.distinct_tags(project="/proj/a") == ["async", "python"]
+
+    def test_distinct_tags_none_returns_global(self, store, embedder):
+        store.add(
+            [
+                _make_learning(
+                    embedder,
+                    text="python async",
+                    id="dtg-1",
+                    tags=["python", "async"],
+                    project="/proj/a",
+                ),
+                _make_learning(
+                    embedder,
+                    text="react tips",
+                    id="dtg-2",
+                    tags=["javascript"],
+                    project="/proj/b",
+                ),
+            ]
+        )
+        assert store.distinct_tags() == ["async", "javascript", "python"]
+
+    def test_distinct_tags_project_no_match(self, store, embedder):
+        store.add(
+            [
+                _make_learning(
+                    embedder,
+                    text="something",
+                    id="dtn-1",
+                    tags=["python"],
+                    project="/proj/a",
+                ),
+            ]
+        )
+        assert store.distinct_tags(project="/nonexistent") == []
 
 
 class TestHasSession:

@@ -291,38 +291,54 @@ If the learning is too similar to one already stored, it is rejected as a duplic
 
 ### `crowd-control list`
 
-Lists stored learnings with optional filtering.
+Lists stored learnings with optional filtering. Defaults to the current project.
 
 ```bash
-crowd-control list
-crowd-control list --project /Users/you/code/webapp
+crowd-control list                                    # Current project
+crowd-control list --all                              # All projects
+crowd-control list --project /Users/you/code/webapp   # Specific project
 crowd-control list --category gotcha
 crowd-control list --limit 10
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--project` | all projects | Filter by project path |
+| `--project` | current directory | Filter by project path |
+| `--all` | off | Show learnings from all projects |
 | `--category` | all | Filter by learning category |
 | `--limit` | `50` | Maximum learnings to display |
+
+`--all` and `--project` cannot be used together.
 
 ---
 
 ### `crowd-control status`
 
-Displays database path, learning count, and embedding configuration.
+Displays database path, project-scoped learning count and tags, and embedding
+configuration. Defaults to the current project.
 
 ```bash
-crowd-control status
+crowd-control status                                  # Current project
+crowd-control status --project /Users/you/code/other  # Specific project
 ```
 
-Output:
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--project` | current directory | Project to show stats for |
+
+Output (multi-project):
 
 ```
 Database: /Users/you/.crowd-control/db
-Learnings: 142
+Project: /Users/you/code/webapp
+Learnings: 42 (312 total)
+Tags: auth, middleware
+Tags (all): auth, database, middleware, react, testing
 Embedding: ollama/nomic-embed-text
 ```
+
+When all learnings belong to the current project, the output simplifies to just
+`Learnings: 42` and `Tags: ...` without the totals.
 
 If the database hasn't been created yet (no ingestions), you'll see
 "Database not initialized" — this is normal.
@@ -334,17 +350,22 @@ If the database hasn't been created yet (no ingestions), you'll see
 Exports all learnings as JSON.
 
 ```bash
-crowd-control export                          # Print to stdout
-crowd-control export -o learnings.json        # Write to file
-crowd-control export --project /path/to/proj  # Filter by project
+crowd-control export                          # Current project to stdout
+crowd-control export -o learnings.json        # Current project to file
+crowd-control export --all                    # All projects
+crowd-control export --all -o dump.json       # Full export to file
+crowd-control export --project /path/to/proj  # Specific project
 crowd-control export --category debugging_insight
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `-o`, `--output` | stdout | Output file path |
-| `--project` | all projects | Filter by project path |
+| `--project` | current directory | Filter by project path |
+| `--all` | off | Export learnings from all projects |
 | `--category` | all | Filter by learning category |
+
+`--all` and `--project` cannot be used together.
 
 The output is a JSON object with `version`, `exported_at`, `count`, and `learnings`
 fields.

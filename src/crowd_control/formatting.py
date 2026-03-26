@@ -1,6 +1,6 @@
-"""Shared formatting for retrieval results.
+"""Shared formatting for retrieval results and status output.
 
-Used by both the CLI and the MCP server to render search output.
+Used by both the CLI and the MCP server to render search and status output.
 """
 
 from __future__ import annotations
@@ -63,6 +63,43 @@ def extract_display_learnings(result: RetrievalResult) -> list[FormattedLearning
         )
 
     return learnings
+
+
+@dataclass
+class StatusCounts:
+    """Formatted status lines for project-scoped output."""
+
+    learnings_line: str
+    tags_line: str
+    all_tags_line: str | None
+
+
+def format_status_counts(
+    project_count: int,
+    total_count: int,
+    project_tags: list[str],
+    all_tags: list[str],
+) -> StatusCounts:
+    """Format project-scoped status lines.
+
+    When project counts equal total counts (single-project DB), the output
+    is simplified to avoid redundant "(N total)" noise.
+    """
+    project_tag_str = ", ".join(project_tags) if project_tags else "(none)"
+    all_tag_str = ", ".join(all_tags) if all_tags else "(none)"
+
+    if project_count == total_count:
+        return StatusCounts(
+            learnings_line=f"Learnings: {project_count}",
+            tags_line=f"Tags: {project_tag_str}",
+            all_tags_line=None,
+        )
+
+    return StatusCounts(
+        learnings_line=f"Learnings: {project_count} ({total_count} total)",
+        tags_line=f"Tags: {project_tag_str}",
+        all_tags_line=f"Tags (all): {all_tag_str}",
+    )
 
 
 def format_results_text(result: RetrievalResult) -> str:

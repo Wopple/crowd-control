@@ -344,24 +344,34 @@ class LearningStore:
         self._table.delete(f"id = '{escaped}'")
         return True
 
-    def count(self) -> int:
-        """Return the total number of learnings in the table."""
-        return self._table.count_rows()
+    def count(self, project: str | None = None) -> int:
+        """Return the number of learnings, optionally filtered by project."""
+        if project is None:
+            return self._table.count_rows()
+        escaped = project.replace("'", "''")
+        return self._table.count_rows(filter=f"project = '{escaped}'")
 
-    def distinct_tags(self) -> list[str]:
-        """Return all unique tags across all learnings, sorted alphabetically."""
+    def distinct_tags(self, project: str | None = None) -> list[str]:
+        """Return unique tags, optionally filtered by project, sorted alphabetically."""
         if self._table.count_rows() == 0:
             return []
 
-        arrow_table = (
-            self._table.search().select(["tags"]).limit(self._table.count_rows()).to_arrow()
-        )
+        query = self._table.search().select(["tags"])
+        if project is not None:
+            escaped = project.replace("'", "''")
+            query = query.where(f"project = '{escaped}'")
+
+        arrow_table = query.limit(self._table.count_rows()).to_arrow()
+        if arrow_table.num_rows == 0:
+            return []
+
         flat = pc.list_flatten(arrow_table.column("tags"))
         unique = flat.unique().to_pylist()
         logger.debug(
-            "distinct_tags: %d unique tags from %d learnings",
+            "distinct_tags: %d unique tags from %d learnings (project=%s)",
             len(unique),
-            self._table.count_rows(),
+            arrow_table.num_rows,
+            project,
         )
         return sorted(unique)
 

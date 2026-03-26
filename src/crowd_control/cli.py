@@ -54,20 +54,30 @@ def _get_config_or_exit(ctx) -> CrowdControlConfig:
 
 
 @main.command()
+@click.option("--project", default=None, help="Project path (defaults to cwd).")
 @click.pass_context
-def status(ctx):
+def status(ctx, project):
     """Show system status and database stats."""
+    from crowd_control.formatting import format_status_counts
+
     config = _get_config_or_exit(ctx)
+    current_project = project or _detect_project()
     try:
         from crowd_control.storage.db import LearningStore
 
         store = LearningStore(config.db_path)
-        count = store.count()
-        tags = store.distinct_tags()
-        tag_str = ", ".join(tags) if tags else "(none)"
+        sc = format_status_counts(
+            store.count(project=current_project),
+            store.count(),
+            store.distinct_tags(project=current_project),
+            store.distinct_tags(),
+        )
         click.echo(f"Database: {config.db_path}")
-        click.echo(f"Learnings: {count}")
-        click.echo(f"Tags: {tag_str}")
+        click.echo(f"Project: {current_project}")
+        click.echo(sc.learnings_line)
+        click.echo(sc.tags_line)
+        if sc.all_tags_line is not None:
+            click.echo(sc.all_tags_line)
         click.echo(f"Embedding: {config.embedding.provider}/{config.embedding.model}")
     except Exception as e:
         click.echo(f"Database not initialized: {e}")
@@ -208,18 +218,26 @@ def ingest(ctx, path, dry_run, concurrency):
 
 
 @main.command(name="list")
-@click.option("--project", default=None, help="Filter by project path.")
+@click.option("--project", default=None, help="Filter by project path (defaults to cwd).")
+@click.option("--all", "show_all", is_flag=True, help="Show learnings from all projects.")
 @click.option("--category", default=None, help="Filter by category.")
 @click.option("--limit", default=50, type=int, show_default=True)
 @click.pass_context
-def list_cmd(ctx, project, category, limit):
+def list_cmd(ctx, project, show_all, category, limit):
     """List stored learnings."""
+    if show_all and project:
+        click.echo("Cannot use --all and --project together.", err=True)
+        sys.exit(1)
+    if show_all:
+        effective_project = None
+    else:
+        effective_project = project or _detect_project()
     config = _get_config_or_exit(ctx)
     try:
         from crowd_control.storage.db import LearningStore
 
         store = LearningStore(config.db_path)
-        learnings = store.list_learnings(project=project, category=category, limit=limit)
+        learnings = store.list_learnings(project=effective_project, category=category, limit=limit)
     except Exception as e:
         click.echo(f"Database not available: {e}", err=True)
         sys.exit(1)
@@ -374,8 +392,7 @@ def add(ctx, text, category, tags, project):
         if add_result.duplicates:
             dup = add_result.duplicates[0]
             click.echo(
-                f"Learning was not stored (duplicate detected, "
-                f"similarity={dup.similarity:.2f}).",
+                f"Learning was not stored (duplicate detected, similarity={dup.similarity:.2f}).",
                 err=True,
             )
             click.echo(f"Existing: {dup.matched_text}", err=True)
@@ -389,11 +406,19 @@ def add(ctx, text, category, tags, project):
 
 @main.command()
 @click.option("--output", "-o", default=None, type=click.Path(), help="Output file path.")
-@click.option("--project", default=None, help="Filter by project path.")
+@click.option("--project", default=None, help="Filter by project path (defaults to cwd).")
+@click.option("--all", "show_all", is_flag=True, help="Export learnings from all projects.")
 @click.option("--category", default=None, help="Filter by category.")
 @click.pass_context
-def export(ctx, output, project, category):
+def export(ctx, output, project, show_all, category):
     """Export learnings as JSON."""
+    if show_all and project:
+        click.echo("Cannot use --all and --project together.", err=True)
+        sys.exit(1)
+    if show_all:
+        effective_project = None
+    else:
+        effective_project = project or _detect_project()
     config = _get_config_or_exit(ctx)
 
     try:
@@ -404,7 +429,7 @@ def export(ctx, output, project, category):
         click.echo(f"Database not available: {e}", err=True)
         sys.exit(1)
 
-    learnings = store.export_learnings(project=project, category=category)
+    learnings = store.export_learnings(project=effective_project, category=category)
 
     export_data = {
         "version": "1",

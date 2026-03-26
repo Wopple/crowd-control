@@ -47,3 +47,38 @@ def test_add_invalid_category():
     result = runner.invoke(main, ["add", "some text", "--category", "bogus"])
     assert result.exit_code != 0
     assert "Invalid category" in result.output
+
+
+def test_status_command_has_project_option():
+    runner = CliRunner()
+    result = runner.invoke(main, ["status", "--help"])
+    assert result.exit_code == 0
+    assert "--project" in result.output
+
+
+def test_list_command_has_all_flag():
+    runner = CliRunner()
+    result = runner.invoke(main, ["list", "--help"])
+    assert result.exit_code == 0
+    assert "--all" in result.output
+
+
+def test_list_all_and_project_conflict():
+    runner = CliRunner()
+    result = runner.invoke(main, ["list", "--all", "--project", "/foo"])
+    assert result.exit_code != 0
+    assert "Cannot use --all and --project" in result.output
+
+
+def test_export_command_has_all_flag():
+    runner = CliRunner()
+    result = runner.invoke(main, ["export", "--help"])
+    assert result.exit_code == 0
+    assert "--all" in result.output
+
+
+def test_export_all_and_project_conflict():
+    runner = CliRunner()
+    result = runner.invoke(main, ["export", "--all", "--project", "/foo"])
+    assert result.exit_code != 0
+    assert "Cannot use --all and --project" in result.output

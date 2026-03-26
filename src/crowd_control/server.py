@@ -202,6 +202,7 @@ async def handle_add_learning(
     text: str,
     category: str = "pattern_discovery",
     tags: list[str] | None = None,
+    project: str | None = None,
 ) -> str:
     """Manually store a learning for future sessions."""
     from pydantic import ValidationError
@@ -225,7 +226,7 @@ async def handle_add_learning(
             text=text,
             category=validated_category,
             tags=tags or [],
-            project=os.getcwd(),
+            project=project or os.getcwd(),
             session_id="manual",
             confidence=1.0,
         )
@@ -309,29 +310,13 @@ async def handle_ingest_session(
     )
 
 
-async def handle_status(deps: ServerDeps) -> str:
+async def handle_status(deps: ServerDeps, project: str | None = None) -> str:
     """Show the learnings database status and configuration."""
+    from crowd_control.formatting import format_status_counts
+
+    current_project = project or os.getcwd()
     auto_ingest = "enabled" if deps.config.ingestion.auto_ingest else "disabled"
     agent_ingest = "enabled" if deps.config.ingestion.agent_ingest else "disabled"
-
-    if deps.store is None:
-        return (
-            f"Database: {deps.config.db_path} (not initialized)\n"
-            f"Learnings: 0\n"
-            f"Embedding: {deps.config.embedding.provider}/{deps.config.embedding.model}"
-            f" (unavailable)\n"
-            f"Scope: {deps.config.knowledge.scope}\n"
-            f"Auto-ingest: {auto_ingest}\n"
-            f"Agent ingest: {agent_ingest}\n"
-            f"Retrieval: max_results={deps.config.retrieval.max_results}, "
-            f"max_tokens={deps.config.retrieval.max_tokens}"
-        )
-
-    def _get_status_data(store: LearningStore) -> tuple[int, list[str]]:
-        return store.count(), store.distinct_tags()
-
-    count, tags = await asyncio.to_thread(_get_status_data, deps.store)
-    tag_str = ", ".join(tags) if tags else "(none)"
 
     embedder_status = (
         f"{deps.config.embedding.provider}/{deps.config.embedding.model}"
@@ -339,17 +324,61 @@ async def handle_status(deps: ServerDeps) -> str:
         else f"{deps.config.embedding.provider}/{deps.config.embedding.model} (unavailable)"
     )
 
-    return (
-        f"Database: {deps.config.db_path}\n"
-        f"Learnings: {count}\n"
-        f"Tags: {tag_str}\n"
-        f"Embedding: {embedder_status}\n"
-        f"Scope: {deps.config.knowledge.scope}\n"
-        f"Auto-ingest: {auto_ingest}\n"
-        f"Agent ingest: {agent_ingest}\n"
-        f"Retrieval: max_results={deps.config.retrieval.max_results}, "
-        f"max_tokens={deps.config.retrieval.max_tokens}"
+    if deps.store is None:
+        return (
+            f"Database: {deps.config.db_path} (not initialized)\n"
+            f"Project: {current_project}\n"
+            f"Learnings: 0\n"
+            f"Tags: (none)\n"
+            f"Embedding: {embedder_status}\n"
+            f"Scope: {deps.config.knowledge.scope}\n"
+            f"Auto-ingest: {auto_ingest}\n"
+            f"Agent ingest: {agent_ingest}\n"
+            f"Retrieval: max_results={deps.config.retrieval.max_results}, "
+            f"max_tokens={deps.config.retrieval.max_tokens}"
+        )
+
+    def _get_status_data(
+        store: LearningStore,
+        proj: str,
+    ) -> tuple[int, int, list[str], list[str]]:
+        return (
+            store.count(project=proj),
+            store.count(),
+            store.distinct_tags(project=proj),
+            store.distinct_tags(),
+        )
+
+    proj_count, total_count, proj_tags, all_tags = await asyncio.to_thread(
+        _get_status_data,
+        deps.store,
+        current_project,
     )
+
+    logger.info("status: project=%s, count=%d/%d", current_project, proj_count, total_count)
+
+    sc = format_status_counts(proj_count, total_count, proj_tags, all_tags)
+
+    lines = [
+        f"Database: {deps.config.db_path}",
+        f"Project: {current_project}",
+        sc.learnings_line,
+        sc.tags_line,
+    ]
+    if sc.all_tags_line is not None:
+        lines.append(sc.all_tags_line)
+    lines.extend(
+        [
+            f"Embedding: {embedder_status}",
+            f"Scope: {deps.config.knowledge.scope}",
+            f"Auto-ingest: {auto_ingest}",
+            f"Agent ingest: {agent_ingest}",
+            f"Retrieval: max_results={deps.config.retrieval.max_results}, "
+            f"max_tokens={deps.config.retrieval.max_tokens}",
+        ]
+    )
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -401,6 +430,7 @@ def _register_tools(server: FastMCP) -> None:
         text: str,
         category: str = "pattern_discovery",
         tags: list[str] | None = None,
+        project: str | None = None,
         ctx: Context = None,
     ) -> str:
         """Manually store a learning for future sessions.
@@ -413,8 +443,10 @@ def _register_tools(server: FastMCP) -> None:
             category: One of: architecture_decision, debugging_insight,
                       pattern_discovery, tool_usage, codebase_convention, gotcha.
             tags: Optional list of relevant tags (languages, frameworks, concepts).
+            project: Project path to associate with this learning. Defaults to
+                     the current working directory.
         """
-        return await handle_add_learning(_get_deps(ctx), text, category, tags)
+        return await handle_add_learning(_get_deps(ctx), text, category, tags, project)
 
     @server.tool()
     async def ingest_session(
@@ -433,14 +465,21 @@ def _register_tools(server: FastMCP) -> None:
         return await handle_ingest_session(_get_deps(ctx), session_path)
 
     @server.tool()
-    async def status(ctx: Context = None) -> str:
+    async def status(
+        project: str | None = None,
+        ctx: Context = None,
+    ) -> str:
         """Show the learnings database status and configuration.
 
         Returns the number of stored learnings, available tags, database
         path, and current embedding configuration. Use this to discover
         valid tag values before filtering with search_learnings.
+
+        Args:
+            project: Filter stats to a specific project path. Defaults to
+                     the current working directory.
         """
-        return await handle_status(_get_deps(ctx))
+        return await handle_status(_get_deps(ctx), project)
 
 
 def run_server() -> None:

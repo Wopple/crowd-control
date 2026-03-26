@@ -8,7 +8,7 @@ import pytest
 from conftest import FakeEmbedder
 
 from crowd_control.config import CrowdControlConfig
-from crowd_control.formatting import format_results_text
+from crowd_control.formatting import format_results_text, format_status_counts
 from crowd_control.retrieve import RetrievalResult
 from crowd_control.retrieve.rank import RankedResult
 from crowd_control.retrieve.search import SearchResult, SearchResults
@@ -117,6 +117,39 @@ class TestFormatResultsText:
         )
         output = format_results_text(result)
         assert "age=0d" in output
+
+
+# ---------------------------------------------------------------------------
+# T1b: format_status_counts (pure function, in formatting.py)
+# ---------------------------------------------------------------------------
+
+
+class TestFormatStatusCounts:
+    def test_multi_project(self):
+        result = format_status_counts(
+            42, 312, ["async", "python"], ["async", "javascript", "python"]
+        )
+        assert result.learnings_line == "Learnings: 42 (312 total)"
+        assert result.tags_line == "Tags: async, python"
+        assert result.all_tags_line == "Tags (all): async, javascript, python"
+
+    def test_single_project(self):
+        result = format_status_counts(42, 42, ["python"], ["python"])
+        assert result.learnings_line == "Learnings: 42"
+        assert result.tags_line == "Tags: python"
+        assert result.all_tags_line is None
+
+    def test_empty_project(self):
+        result = format_status_counts(0, 312, [], ["python", "javascript"])
+        assert result.learnings_line == "Learnings: 0 (312 total)"
+        assert result.tags_line == "Tags: (none)"
+        assert result.all_tags_line == "Tags (all): python, javascript"
+
+    def test_no_tags_anywhere(self):
+        result = format_status_counts(5, 5, [], [])
+        assert result.learnings_line == "Learnings: 5"
+        assert result.tags_line == "Tags: (none)"
+        assert result.all_tags_line is None
 
 
 # ---------------------------------------------------------------------------
@@ -300,6 +333,119 @@ async def test_status_empty_tags(server_deps):
     """Status shows (none) when no tags exist."""
     text = await handle_status(server_deps)
     assert "Tags: (none)" in text
+
+
+@pytest.mark.anyio
+async def test_status_shows_project_scoped_count(server_deps):
+    """Status shows project-scoped count alongside total."""
+    await handle_add_learning(
+        server_deps,
+        text="insight for proj a",
+        tags=["python"],
+        project="/proj/a",
+    )
+    await handle_add_learning(
+        server_deps,
+        text="another for proj a",
+        tags=["async"],
+        project="/proj/a",
+    )
+    await handle_add_learning(
+        server_deps,
+        text="insight for proj b",
+        tags=["javascript"],
+        project="/proj/b",
+    )
+    text = await handle_status(server_deps, project="/proj/a")
+    assert "Learnings: 2 (3 total)" in text
+    assert "Project: /proj/a" in text
+
+
+@pytest.mark.anyio
+async def test_status_shows_project_scoped_tags(server_deps):
+    """Status shows project tags and all tags separately."""
+    await handle_add_learning(
+        server_deps,
+        text="python insight",
+        tags=["python"],
+        project="/proj/a",
+    )
+    await handle_add_learning(
+        server_deps,
+        text="js insight",
+        tags=["javascript"],
+        project="/proj/b",
+    )
+    text = await handle_status(server_deps, project="/proj/a")
+    assert "Tags: python" in text
+    assert "Tags (all): javascript, python" in text
+
+
+@pytest.mark.anyio
+async def test_status_single_project_no_total_suffix(server_deps):
+    """When all learnings are in one project, no parenthetical total."""
+    await handle_add_learning(
+        server_deps,
+        text="only insight",
+        tags=["python"],
+        project="/proj/a",
+    )
+    text = await handle_status(server_deps, project="/proj/a")
+    assert "Learnings: 1" in text
+    assert "total" not in text
+
+
+@pytest.mark.anyio
+async def test_status_with_explicit_project(server_deps):
+    """Explicit project parameter overrides CWD."""
+    await handle_add_learning(
+        server_deps,
+        text="insight b",
+        tags=[],
+        project="/proj/b",
+    )
+    text = await handle_status(server_deps, project="/proj/b")
+    assert "Project: /proj/b" in text
+    assert "Learnings: 1" in text
+
+
+@pytest.mark.anyio
+async def test_status_empty_project(server_deps):
+    """Project with no learnings shows 0 with total."""
+    await handle_add_learning(
+        server_deps,
+        text="insight a",
+        tags=["python"],
+        project="/proj/a",
+    )
+    text = await handle_status(server_deps, project="/proj/empty")
+    assert "Learnings: 0 (1 total)" in text
+    assert "Tags: (none)" in text
+
+
+@pytest.mark.anyio
+async def test_add_learning_with_explicit_project(server_deps):
+    """add_learning with project parameter stores to that project."""
+    await handle_add_learning(
+        server_deps,
+        text="custom project insight",
+        project="/custom/project",
+    )
+    learnings = server_deps.store.list_learnings(project="/custom/project")
+    assert len(learnings) == 1
+    assert learnings[0]["project"] == "/custom/project"
+
+
+@pytest.mark.anyio
+async def test_add_learning_defaults_to_cwd(server_deps):
+    """add_learning without project uses os.getcwd()."""
+    from unittest.mock import patch
+
+    with patch("crowd_control.server.os") as mock_os:
+        mock_os.getcwd.return_value = "/mock/cwd"
+        await handle_add_learning(server_deps, text="cwd insight")
+    learnings = server_deps.store.list_learnings(project="/mock/cwd")
+    assert len(learnings) == 1
 
 
 @pytest.mark.anyio

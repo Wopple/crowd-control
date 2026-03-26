@@ -101,6 +101,7 @@ insight text — no distillation step.
 | `text`     | `str`             | yes      | —                    | Learning content (max 2000 chars) |
 | `category` | `str`             | no       | `pattern_discovery`  | Learning category |
 | `tags`     | `list[str] | None`| no       | `[]`                 | Relevant tags |
+| `project`  | `str | None`      | no       | `os.getcwd()`        | Project path for this learning |
 
 Categories: `architecture_decision`, `debugging_insight`, `pattern_discovery`,
 `tool_usage`, `codebase_convention`, `gotcha`.
@@ -120,11 +121,19 @@ learnings distilled, stored, and deduplicated.
 
 ### `status`
 
-Shows database status and configuration. No parameters.
+Shows database status and configuration, scoped to a project.
 
-Returns: database path, learning count, available tags, embedding provider/model,
-scope, retrieval limits. The tag list is useful for discovering valid values before
-using the `tags` filter in `search_learnings`.
+| Parameter  | Type              | Required | Default        | Description |
+|------------|-------------------|----------|----------------|-------------|
+| `project`  | `str | None`      | no       | `os.getcwd()`  | Filter stats to specific project |
+
+Returns: database path, project path, project-scoped learning count (with global total),
+project-scoped tags (with global tag list), embedding provider/model, scope, retrieval
+limits. When all learnings belong to the current project, the output is simplified to
+avoid redundant totals.
+
+The tag list is useful for discovering valid values before using the `tags` filter in
+`search_learnings`.
 
 ## How Tools Map to Existing Modules
 
