@@ -117,6 +117,47 @@ class TestList:
         assert results[0]["category"] == "gotcha"
 
 
+class TestFindByPrefix:
+    def test_exact_match(self, store, embedder):
+        """Full ID returns exactly one result."""
+        store.add([_make_learning(embedder, id="abcd1234efab5678")])
+        results = store.find_by_prefix("abcd1234efab5678")
+        assert len(results) == 1
+        assert results[0]["id"] == "abcd1234efab5678"
+
+    def test_prefix_match(self, store, embedder):
+        """8-char prefix resolves to the learning."""
+        store.add([_make_learning(embedder, id="abcd1234efab5678")])
+        results = store.find_by_prefix("abcd1234")
+        assert len(results) == 1
+        assert results[0]["id"] == "abcd1234efab5678"
+
+    def test_no_match(self, store, embedder):
+        """Nonexistent prefix returns empty list."""
+        store.add([_make_learning(embedder, id="abcd1234")])
+        results = store.find_by_prefix("00000000")
+        assert results == []
+
+    def test_ambiguous_prefix(self, store, embedder):
+        """Prefix matching multiple IDs returns all matches."""
+        store.add([
+            _make_learning(embedder, text="python asyncio concurrency patterns", id="abcd0001"),
+            _make_learning(embedder, text="javascript react component lifecycle", id="abcd0002"),
+        ])
+        results = store.find_by_prefix("abcd")
+        assert len(results) == 2
+
+    def test_strips_vector_data(self, store, embedder):
+        """Results do not include vector arrays."""
+        store.add([_make_learning(embedder, id="abcd1234")])
+        results = store.find_by_prefix("abcd1234")
+        assert "vector" not in results[0]
+
+    def test_empty_table(self, store):
+        """Empty table returns empty list."""
+        assert store.find_by_prefix("anything") == []
+
+
 class TestDelete:
     def test_delete(self, store, embedder):
         store.add([_make_learning(embedder, id="del-1")])

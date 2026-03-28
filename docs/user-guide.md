@@ -526,6 +526,7 @@ Tuning tips:
 |-------|------|---------|-------------|
 | `auto_ingest` | bool | `true` | Automatically ingest sessions via SessionEnd hook |
 | `agent_ingest` | bool | `true` | Allow agents to trigger ingestion via the `ingest_session` MCP tool |
+| `agent_delete` | bool | `true` | Allow agents to delete learnings via the `delete_learning` MCP tool |
 | `batch_size` | int | `5` | Embedding batch size |
 | `dedup_threshold` | float | `0.90` | Cosine similarity threshold for near-duplicate rejection |
 | `max_age_days` | int | `90` | Delete learnings older than this (0 = never prune) |
@@ -577,6 +578,16 @@ With both flags disabled, learnings are only added via `add_learning` (MCP tool)
 explicit `crowd-control ingest` commands. The agent can still search existing
 learnings — only automatic extraction is blocked.
 
+**Disabling agent-initiated deletion:**
+
+```toml
+[ingestion]
+agent_delete = false
+```
+
+With deletion disabled, the agent can still search and add learnings but cannot
+remove them. Old learnings are still cleaned up automatically by TTL pruning.
+
 **Enabling trace logging:**
 
 ```toml
@@ -621,6 +632,7 @@ project_boost = 1.5
 [ingestion]
 auto_ingest = true
 agent_ingest = true
+agent_delete = true
 batch_size = 5
 dedup_threshold = 0.90
 max_age_days = 90

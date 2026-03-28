@@ -335,6 +335,28 @@ class LearningStore:
         results.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
         return results
 
+    def find_by_prefix(self, prefix: str) -> list[dict]:
+        """Find learnings whose ID starts with the given prefix.
+
+        Returns matching rows without vector data. Used for resolving
+        short ID prefixes to full IDs. Filters in Python rather than SQL
+        because LanceDB's search-mode WHERE clause is a post-filter on
+        KNN results, not a full-table scan.
+        """
+        total = self._table.count_rows()
+        if total == 0:
+            return []
+
+        rows = self._table.search().limit(total).to_list()
+        results = []
+        for row in rows:
+            if row["id"].startswith(prefix):
+                row.pop("_rowid", None)
+                row.pop("_distance", None)
+                row.pop("vector", None)
+                results.append(row)
+        return results
+
     def delete(self, learning_id: str) -> bool:
         """Delete a learning by ID. Returns True if it existed."""
         existing = self.get(learning_id)

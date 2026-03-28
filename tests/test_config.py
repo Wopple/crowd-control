@@ -85,6 +85,7 @@ scope = "shared"
     assert config.ingestion == IngestionConfig(
         auto_ingest=False,
         agent_ingest=False,
+        agent_delete=True,
         batch_size=3,
         dedup_threshold=0.9,
         max_age_days=60,
@@ -145,6 +146,18 @@ recency_decay = 0.95
     # recency_decay is silently ignored, defaults apply
     assert config.retrieval.recency_half_life_days == 7.0
     assert config.retrieval.hotness_weight == 0.2
+
+
+def test_agent_delete_defaults_to_true():
+    config = CrowdControlConfig()
+    assert config.ingestion.agent_delete is True
+
+
+def test_agent_delete_from_toml(tmp_path):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text("[ingestion]\nagent_delete = false\n")
+    config = load_config(config_file)
+    assert config.ingestion.agent_delete is False
 
 
 def test_unknown_keys_in_any_section_filtered(tmp_path):

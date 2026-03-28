@@ -115,7 +115,12 @@ def create_server(lifespan=None) -> FastMCP:
             "or a debugging technique specific to this codebase.\n"
             "- Do not store generic programming knowledge that any developer would "
             "know. Only store insights specific to this project or its particular "
-            "combination of tools and patterns."
+            "combination of tools and patterns.\n\n"
+            "When to delete (delete_learning):\n"
+            "- When a search result is clearly contradicted by the current codebase. "
+            "Verify against actual code before deleting.\n"
+            "- Do not delete learnings that could serve as useful context for what "
+            "does not work, even if the referenced code has changed."
         ),
         lifespan=lifespan or _default_lifespan,
     )
@@ -156,7 +161,6 @@ def _require_store(deps: ServerDeps) -> LearningStore:
 async def handle_search_learnings(
     deps: ServerDeps,
     query: str,
-    project: str | None = None,
     category: str | None = None,
     tags: list[str] | None = None,
     limit: int | None = None,
@@ -174,7 +178,7 @@ async def handle_search_learnings(
     if limit is not None:
         retrieval_config = dataclasses.replace(retrieval_config, max_results=limit)
 
-    current_project = project or os.getcwd()
+    current_project = os.getcwd()
 
     from crowd_control.retrieve import retrieve_learnings
 
@@ -202,7 +206,6 @@ async def handle_add_learning(
     text: str,
     category: str = "pattern_discovery",
     tags: list[str] | None = None,
-    project: str | None = None,
 ) -> str:
     """Manually store a learning for future sessions."""
     from pydantic import ValidationError
@@ -226,7 +229,7 @@ async def handle_add_learning(
             text=text,
             category=validated_category,
             tags=tags or [],
-            project=project or os.getcwd(),
+            project=os.getcwd(),
             session_id="manual",
             confidence=1.0,
         )
@@ -310,11 +313,11 @@ async def handle_ingest_session(
     )
 
 
-async def handle_status(deps: ServerDeps, project: str | None = None) -> str:
+async def handle_status(deps: ServerDeps) -> str:
     """Show the learnings database status and configuration."""
     from crowd_control.formatting import format_status_counts
 
-    current_project = project or os.getcwd()
+    current_project = os.getcwd()
     auto_ingest = "enabled" if deps.config.ingestion.auto_ingest else "disabled"
     agent_ingest = "enabled" if deps.config.ingestion.agent_ingest else "disabled"
 
@@ -381,6 +384,84 @@ async def handle_status(deps: ServerDeps, project: str | None = None) -> str:
     return "\n".join(lines)
 
 
+async def handle_delete_learning(
+    deps: ServerDeps,
+    ids: list[str],
+) -> str:
+    """Delete learnings by ID prefix."""
+    if not deps.config.ingestion.agent_delete:
+        logger.info("delete_learning: blocked by agent_delete=false")
+        return (
+            "Agent-initiated deletion is disabled. Set `agent_delete = true` "
+            "in ~/.crowd-control/config.toml under [ingestion] to enable."
+        )
+
+    try:
+        store = _require_store(deps)
+    except ValueError as e:
+        return str(e)
+
+    current_project = os.getcwd()
+    min_prefix_len = 8
+
+    deleted: list[str] = []
+    errors: list[str] = []
+
+    for prefix in ids:
+        if len(prefix) < min_prefix_len:
+            errors.append(f"id={prefix}: too short (minimum {min_prefix_len} characters)")
+            continue
+
+        if not all(c in "0123456789abcdef" for c in prefix.lower()):
+            errors.append(f"id={prefix}: invalid characters (must be hex)")
+            continue
+
+        matches = await asyncio.to_thread(store.find_by_prefix, prefix)
+
+        if len(matches) == 0:
+            errors.append(f"id={prefix}: not found")
+            continue
+
+        if len(matches) > 1:
+            found = ", ".join(m["id"][:8] for m in matches)
+            errors.append(f"id={prefix}: ambiguous, matches: {found}")
+            continue
+
+        match = matches[0]
+        if match["project"] != current_project:
+            errors.append(f"id={prefix}: belongs to a different project, skipping")
+            continue
+
+        full_id = match["id"]
+        await asyncio.to_thread(store.delete, full_id)
+
+        snippet = match["text"][:80]
+        deleted.append(
+            f"  Deleted id={full_id[:8]} [{match['category']}]: {snippet}"
+        )
+
+    lines: list[str] = []
+    if deleted:
+        lines.append(f"Deleted {len(deleted)} learning(s):")
+        lines.extend(deleted)
+    if errors:
+        if deleted:
+            lines.append("")
+        lines.append(f"Skipped {len(errors)} ID(s):")
+        lines.extend(f"  {e}" for e in errors)
+    if not deleted and not errors:
+        lines.append("No IDs provided.")
+
+    logger.info(
+        "delete_learning: deleted=%d, errors=%d, project=%s",
+        len(deleted),
+        len(errors),
+        current_project,
+    )
+
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # MCP tool registration — thin wrappers that extract deps from context
 # ---------------------------------------------------------------------------
@@ -392,7 +473,6 @@ def _register_tools(server: FastMCP) -> None:
     @server.tool()
     async def search_learnings(
         query: str,
-        project: str | None = None,
         category: str | None = None,
         tags: list[str] | None = None,
         limit: int | None = None,
@@ -413,7 +493,6 @@ def _register_tools(server: FastMCP) -> None:
                    - Bad: "collision rework phase 1" ("phase"/"rework" match noise)
                    If results seem noisy, narrow with tags or category before
                    rephrasing the query.
-            project: Filter to a specific project path. Defaults to current project.
             category: Filter by learning category (e.g. 'debugging_insight',
                       'architecture_decision', 'gotcha', 'pattern_discovery',
                       'tool_usage', 'codebase_convention').
@@ -423,14 +502,13 @@ def _register_tools(server: FastMCP) -> None:
                   tool to see available tags.
             limit: Maximum number of results (default: from config, typically 15).
         """
-        return await handle_search_learnings(_get_deps(ctx), query, project, category, tags, limit)
+        return await handle_search_learnings(_get_deps(ctx), query, category, tags, limit)
 
     @server.tool()
     async def add_learning(
         text: str,
         category: str = "pattern_discovery",
         tags: list[str] | None = None,
-        project: str | None = None,
         ctx: Context = None,
     ) -> str:
         """Manually store a learning for future sessions.
@@ -443,10 +521,8 @@ def _register_tools(server: FastMCP) -> None:
             category: One of: architecture_decision, debugging_insight,
                       pattern_discovery, tool_usage, codebase_convention, gotcha.
             tags: Optional list of relevant tags (languages, frameworks, concepts).
-            project: Project path to associate with this learning. Defaults to
-                     the current working directory.
         """
-        return await handle_add_learning(_get_deps(ctx), text, category, tags, project)
+        return await handle_add_learning(_get_deps(ctx), text, category, tags)
 
     @server.tool()
     async def ingest_session(
@@ -466,7 +542,6 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool()
     async def status(
-        project: str | None = None,
         ctx: Context = None,
     ) -> str:
         """Show the learnings database status and configuration.
@@ -474,12 +549,46 @@ def _register_tools(server: FastMCP) -> None:
         Returns the number of stored learnings, available tags, database
         path, and current embedding configuration. Use this to discover
         valid tag values before filtering with search_learnings.
+        """
+        return await handle_status(_get_deps(ctx))
+
+    @server.tool()
+    async def delete_learning(
+        ids: list[str],
+        ctx: Context = None,
+    ) -> str:
+        """Delete outdated learnings by ID prefix.
+
+        Use this to remove learnings that are clearly contradicted by the current
+        state of the codebase. Each search result includes an `id=XXXXXXXX` prefix
+        that can be passed to this tool.
+
+        When to delete:
+        - ONLY delete a learning when it is clearly contradicted by the current
+          state of the codebase AND it is not useful context of what has been
+          tried and did not work. Before deleting, you MUST verify against the
+          actual code that the learning's claims are no longer true.
+        - Examples: a learning says "function X uses pattern Y" but X was
+          rewritten to use pattern Z; a learning references a file or module
+          that no longer exists; a learning describes a bug workaround for
+          a bug that has since been fixed.
+
+        When NOT to delete:
+        - Do NOT delete learnings about general architecture decisions,
+          conventions, or debugging techniques that are still conceptually
+          valid, even if the specific code they reference has changed.
+        - Do NOT delete a learning just because it is old or has a low
+          retrieval count — the TTL pruning system handles that automatically.
+        - Do NOT delete a learning when it could serve as useful context for
+          what does not work.
+        - When in doubt, leave the learning. False deletions lose knowledge
+          that cannot be recovered.
 
         Args:
-            project: Filter stats to a specific project path. Defaults to
-                     the current working directory.
+            ids: List of learning ID prefixes (minimum 8 characters each).
+                 These are shown as `id=XXXXXXXX` in search results.
         """
-        return await handle_status(_get_deps(ctx), project)
+        return await handle_delete_learning(_get_deps(ctx), ids)
 
 
 def run_server() -> None:

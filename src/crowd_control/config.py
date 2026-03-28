@@ -51,6 +51,7 @@ class RetrievalConfig:
 class IngestionConfig:
     auto_ingest: bool = True
     agent_ingest: bool = True
+    agent_delete: bool = True
     batch_size: int = 5
     dedup_threshold: float = 0.90
     max_age_days: int = 90

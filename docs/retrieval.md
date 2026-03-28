@@ -193,11 +193,11 @@ Output:
 ```
 Searching for: "how does the auth system work"
 
-  [1] (score=0.87) [architecture_decision]
+  [1] (score=0.87) [architecture_decision] id=a1b2c3d4
       The auth system uses JWT tokens stored in HttpOnly cookies...
       project=/users/dan/code/webapp  retrieved=5x  age=3d
 
-  [2] (score=0.72) [debugging_insight]
+  [2] (score=0.72) [debugging_insight] id=e5f6a7b8
       Auth middleware must be registered before the CORS middleware...
       project=/users/dan/code/webapp  retrieved=2x  age=7d
 

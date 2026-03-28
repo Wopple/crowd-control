@@ -84,7 +84,6 @@ pipeline that the CLI uses — query embedding, vector search, ranking, dedup, t
 | Parameter  | Type              | Required | Default        | Description |
 |------------|-------------------|----------|----------------|-------------|
 | `query`    | `str`             | yes      | —              | Natural language search query |
-| `project`  | `str | None`      | no       | `os.getcwd()`  | Filter to specific project |
 | `category` | `str | None`      | no       | all categories | Filter by learning category |
 | `tags`     | `list[str] | None`| no       | no tag filter  | Filter by tags (match-any, case-insensitive) |
 | `limit`    | `int | None`      | no       | config default | Max results to return |
@@ -101,7 +100,6 @@ insight text — no distillation step.
 | `text`     | `str`             | yes      | —                    | Learning content (max 2000 chars) |
 | `category` | `str`             | no       | `pattern_discovery`  | Learning category |
 | `tags`     | `list[str] | None`| no       | `[]`                 | Relevant tags |
-| `project`  | `str | None`      | no       | `os.getcwd()`        | Project path for this learning |
 
 Categories: `architecture_decision`, `debugging_insight`, `pattern_discovery`,
 `tool_usage`, `codebase_convention`, `gotcha`.
@@ -121,11 +119,7 @@ learnings distilled, stored, and deduplicated.
 
 ### `status`
 
-Shows database status and configuration, scoped to a project.
-
-| Parameter  | Type              | Required | Default        | Description |
-|------------|-------------------|----------|----------------|-------------|
-| `project`  | `str | None`      | no       | `os.getcwd()`  | Filter stats to specific project |
+Shows database status and configuration, scoped to the current project.
 
 Returns: database path, project path, project-scoped learning count (with global total),
 project-scoped tags (with global tag list), embedding provider/model, scope, retrieval
@@ -134,6 +128,30 @@ avoid redundant totals.
 
 The tag list is useful for discovering valid values before using the `tags` filter in
 `search_learnings`.
+
+### `delete_learning`
+
+Deletes learnings that are clearly contradicted by the current codebase state.
+The agent must verify against actual code before deleting. Deletion is scoped
+to the current project — cross-project deletion is rejected server-side.
+
+| Parameter  | Type        | Required | Default | Description |
+|------------|-------------|----------|---------|-------------|
+| `ids`      | `list[str]` | yes      | —       | Learning ID prefixes (minimum 8 chars, from search output) |
+
+Returns a summary of deleted learnings and any errors (not found, ambiguous,
+cross-project). Does not require the embedding provider.
+
+Controlled by `agent_delete` in `[ingestion]` config (default: `true`).
+
+## Project Scoping
+
+All MCP tools are scoped to the current working directory (`os.getcwd()`),
+which is set by Claude Code when it launches the MCP server subprocess. Tools
+do not accept a `project` parameter — the agent cannot override the scope.
+
+This is enforced server-side. The CLI commands (`search`, `add`, `status`)
+retain their `--project` flag for user-initiated cross-project queries.
 
 ## How Tools Map to Existing Modules
 
@@ -145,6 +163,7 @@ The server is a thin adapter — each tool delegates to existing, tested modules
 | `add_learning` | `storage.models.Learning` + `embed` + `storage.db.LearningStore.add()` |
 | `ingest_session` | `ingest.pipeline.ingest_session()` |
 | `status` | `storage.db.LearningStore.count()` + config |
+| `delete_learning` | `storage.db.LearningStore.find_by_prefix()` + `delete()` |
 
 ## Project Detection
 

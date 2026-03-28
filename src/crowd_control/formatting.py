@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 class FormattedLearning:
     """A single learning formatted for display."""
 
+    id: str
     rank: int
     score: float
     category: str
@@ -52,6 +53,7 @@ def extract_display_learnings(result: RetrievalResult) -> list[FormattedLearning
 
         learnings.append(
             FormattedLearning(
+                id=r.id,
                 rank=i,
                 score=r.final_score,
                 category=r.category,
@@ -115,7 +117,7 @@ def format_results_text(result: RetrievalResult) -> str:
 
     for fl in learnings:
         lines.append(
-            f"[{fl.rank}] (score={fl.score:.2f}) [{fl.category}]\n"
+            f"[{fl.rank}] (score={fl.score:.2f}) [{fl.category}] id={fl.id[:8]}\n"
             f"    {fl.text}\n"
             f"    project={fl.project}  retrieved={fl.active_count}x  "
             f"age={fl.age_days}d"
