@@ -506,6 +506,53 @@ class TestDistillSegment:
     @patch.dict("os.environ", {}, clear=True)
     @patch("crowd_control.ingest.distiller._get_git_sha", return_value=None)
     @patch("crowd_control.ingest.distiller.call_claude")
+    def test_project_name_from_config_file(self, mock_call, mock_sha, tmp_path):
+        """When .crowd-control exists at session path, learning uses the project name."""
+        (tmp_path / ".crowd-control").write_text('[project]\nname = "my-app"\n')
+        mock_call.return_value = {
+            "learnings": [
+                {
+                    "text": "A learning",
+                    "category": "gotcha",
+                    "tags": [],
+                    "confidence": 0.7,
+                }
+            ]
+        }
+
+        session = _make_session(project_path=str(tmp_path))
+        segment = _make_segment()
+        learnings = distill_segment(segment, session)
+
+        assert len(learnings) == 1
+        assert learnings[0].project == "my-app"
+
+    @patch.dict("os.environ", {}, clear=True)
+    @patch("crowd_control.ingest.distiller._get_git_sha", return_value=None)
+    @patch("crowd_control.ingest.distiller.call_claude")
+    def test_project_path_without_config_file(self, mock_call, mock_sha, tmp_path):
+        """Without .crowd-control, learning uses the filesystem path."""
+        mock_call.return_value = {
+            "learnings": [
+                {
+                    "text": "A learning",
+                    "category": "gotcha",
+                    "tags": [],
+                    "confidence": 0.7,
+                }
+            ]
+        }
+
+        session = _make_session(project_path=str(tmp_path))
+        segment = _make_segment()
+        learnings = distill_segment(segment, session)
+
+        assert len(learnings) == 1
+        assert learnings[0].project == str(tmp_path.resolve())
+
+    @patch.dict("os.environ", {}, clear=True)
+    @patch("crowd_control.ingest.distiller._get_git_sha", return_value=None)
+    @patch("crowd_control.ingest.distiller.call_claude")
     def test_oversized_learning_skipped(self, mock_call, mock_sha):
         """Oversized learning text is skipped; valid learnings in the same batch are kept."""
         mock_call.return_value = {

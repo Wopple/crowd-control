@@ -1,11 +1,10 @@
 """Tests for data models."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytest
 
 from crowd_control.storage.models import (
-    ContentBlock,
     ConversationSegment,
     KnowledgeScope,
     Learning,

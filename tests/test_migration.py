@@ -10,14 +10,13 @@ import pytest
 
 from crowd_control.storage.db import LearningStore, _make_schema
 from crowd_control.storage.migration import (
+    _METADATA_TABLE,
     CURRENT_SCHEMA_VERSION,
     Migration,
-    _METADATA_TABLE,
     _write_schema_version,
     read_schema_version,
     run_migrations,
 )
-
 
 # ---------------------------------------------------------------------------
 # Test helpers

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import patch
 
 import pytest
 from conftest import FakeEmbedder, insert_learning
@@ -30,12 +29,12 @@ from crowd_control.storage.models import Learning, LearningCategory
 # ---------------------------------------------------------------------------
 
 
-def _make_deps(tmp_path, dimensions=8):
+def _make_deps(tmp_path, dimensions=8, project_id="/test/project"):
     """Build ServerDeps with a FakeEmbedder and real LanceDB for testing."""
     embedder = FakeEmbedder(dimensions=dimensions)
     config = CrowdControlConfig(storage_dir=str(tmp_path))
     store = LearningStore(config.db_path, vector_dimensions=dimensions)
-    return ServerDeps(config=config, store=store, embedder=embedder)
+    return ServerDeps(config=config, store=store, embedder=embedder, project_id=project_id)
 
 
 # ---------------------------------------------------------------------------
@@ -375,17 +374,33 @@ async def test_status_empty_tags(server_deps):
 @pytest.mark.anyio
 async def test_status_shows_project_scoped_count(tmp_path):
     """Status shows project-scoped count alongside total."""
-    deps = _make_deps(tmp_path)
-    insert_learning(deps.store, deps.embedder, "insight for proj a",
-                    id="sc-a1", tags=["python"], project="/proj/a")
-    insert_learning(deps.store, deps.embedder, "another for proj a",
-                    id="sc-a2", tags=["async"], project="/proj/a")
-    insert_learning(deps.store, deps.embedder, "insight for proj b",
-                    id="sc-b1", tags=["javascript"], project="/proj/b")
+    deps = _make_deps(tmp_path, project_id="/proj/a")
+    insert_learning(
+        deps.store,
+        deps.embedder,
+        "insight for proj a",
+        id="sc-a1",
+        tags=["python"],
+        project="/proj/a",
+    )
+    insert_learning(
+        deps.store,
+        deps.embedder,
+        "another for proj a",
+        id="sc-a2",
+        tags=["async"],
+        project="/proj/a",
+    )
+    insert_learning(
+        deps.store,
+        deps.embedder,
+        "insight for proj b",
+        id="sc-b1",
+        tags=["javascript"],
+        project="/proj/b",
+    )
 
-    with patch("crowd_control.server.os") as mock_os:
-        mock_os.getcwd.return_value = "/proj/a"
-        text = await handle_status(deps)
+    text = await handle_status(deps)
 
     assert "Learnings: 2 (3 total)" in text
     assert "Project: /proj/a" in text
@@ -394,15 +409,15 @@ async def test_status_shows_project_scoped_count(tmp_path):
 @pytest.mark.anyio
 async def test_status_shows_project_scoped_tags(tmp_path):
     """Status shows project tags and all tags separately."""
-    deps = _make_deps(tmp_path)
-    insert_learning(deps.store, deps.embedder, "python insight",
-                    id="st-a1", tags=["python"], project="/proj/a")
-    insert_learning(deps.store, deps.embedder, "js insight",
-                    id="st-b1", tags=["javascript"], project="/proj/b")
+    deps = _make_deps(tmp_path, project_id="/proj/a")
+    insert_learning(
+        deps.store, deps.embedder, "python insight", id="st-a1", tags=["python"], project="/proj/a"
+    )
+    insert_learning(
+        deps.store, deps.embedder, "js insight", id="st-b1", tags=["javascript"], project="/proj/b"
+    )
 
-    with patch("crowd_control.server.os") as mock_os:
-        mock_os.getcwd.return_value = "/proj/a"
-        text = await handle_status(deps)
+    text = await handle_status(deps)
 
     assert "Tags: python" in text
     assert "Tags (all): javascript, python" in text
@@ -411,28 +426,24 @@ async def test_status_shows_project_scoped_tags(tmp_path):
 @pytest.mark.anyio
 async def test_status_single_project_no_total_suffix(tmp_path):
     """When all learnings are in one project, no parenthetical total."""
-    deps = _make_deps(tmp_path)
-    insert_learning(deps.store, deps.embedder, "only insight",
-                    id="sn-a1", tags=["python"], project="/proj/a")
+    deps = _make_deps(tmp_path, project_id="/proj/a")
+    insert_learning(
+        deps.store, deps.embedder, "only insight", id="sn-a1", tags=["python"], project="/proj/a"
+    )
 
-    with patch("crowd_control.server.os") as mock_os:
-        mock_os.getcwd.return_value = "/proj/a"
-        text = await handle_status(deps)
+    text = await handle_status(deps)
 
     assert "Learnings: 1" in text
     assert "total" not in text
 
 
 @pytest.mark.anyio
-async def test_status_uses_cwd_for_project(tmp_path):
-    """Status uses os.getcwd() to determine the current project."""
-    deps = _make_deps(tmp_path)
-    insert_learning(deps.store, deps.embedder, "insight b",
-                    id="su-b1", project="/proj/b")
+async def test_status_uses_project_id(tmp_path):
+    """Status uses deps.project_id to determine the current project."""
+    deps = _make_deps(tmp_path, project_id="/proj/b")
+    insert_learning(deps.store, deps.embedder, "insight b", id="su-b1", project="/proj/b")
 
-    with patch("crowd_control.server.os") as mock_os:
-        mock_os.getcwd.return_value = "/proj/b"
-        text = await handle_status(deps)
+    text = await handle_status(deps)
 
     assert "Project: /proj/b" in text
     assert "Learnings: 1" in text
@@ -441,25 +452,22 @@ async def test_status_uses_cwd_for_project(tmp_path):
 @pytest.mark.anyio
 async def test_status_empty_project(tmp_path):
     """Project with no learnings shows 0 with total."""
-    deps = _make_deps(tmp_path)
-    insert_learning(deps.store, deps.embedder, "insight a",
-                    id="se-a1", tags=["python"], project="/proj/a")
+    deps = _make_deps(tmp_path, project_id="/proj/empty")
+    insert_learning(
+        deps.store, deps.embedder, "insight a", id="se-a1", tags=["python"], project="/proj/a"
+    )
 
-    with patch("crowd_control.server.os") as mock_os:
-        mock_os.getcwd.return_value = "/proj/empty"
-        text = await handle_status(deps)
+    text = await handle_status(deps)
 
     assert "Learnings: 0 (1 total)" in text
     assert "Tags: (none)" in text
 
 
 @pytest.mark.anyio
-async def test_add_learning_uses_cwd(server_deps):
-    """add_learning uses os.getcwd() for the project."""
-    with patch("crowd_control.server.os") as mock_os:
-        mock_os.getcwd.return_value = "/mock/cwd"
-        await handle_add_learning(server_deps, text="cwd insight")
-    learnings = server_deps.store.list_learnings(project="/mock/cwd")
+async def test_add_learning_uses_project_id(server_deps):
+    """add_learning uses deps.project_id for the project."""
+    await handle_add_learning(server_deps, text="project id insight")
+    learnings = server_deps.store.list_learnings(project=server_deps.project_id)
     assert len(learnings) == 1
 
 
@@ -608,8 +616,11 @@ async def test_registered_tools():
     tools = await server.list_tools()
     tool_names = {t.name for t in tools}
     assert tool_names == {
-        "search_learnings", "add_learning", "ingest_session",
-        "status", "delete_learning",
+        "search_learnings",
+        "add_learning",
+        "ingest_session",
+        "status",
+        "delete_learning",
     }
 
 
@@ -621,13 +632,12 @@ async def test_registered_tools():
 @pytest.mark.anyio
 async def test_delete_learning_success(tmp_path):
     """Delete a learning by ID prefix."""
-    deps = _make_deps(tmp_path)
-    insert_learning(deps.store, deps.embedder, "outdated insight",
-                    id="dead1234beef5678", project="/my/project")
+    deps = _make_deps(tmp_path, project_id="/my/project")
+    insert_learning(
+        deps.store, deps.embedder, "outdated insight", id="dead1234beef5678", project="/my/project"
+    )
 
-    with patch("crowd_control.server.os") as mock_os:
-        mock_os.getcwd.return_value = "/my/project"
-        result = await handle_delete_learning(deps, ["dead1234"])
+    result = await handle_delete_learning(deps, ["dead1234"])
 
     assert "Deleted 1" in result
     assert deps.store.count() == 0
@@ -673,13 +683,16 @@ async def test_delete_learning_not_found(server_deps):
 @pytest.mark.anyio
 async def test_delete_learning_cross_project_rejected(tmp_path):
     """Learnings from other projects cannot be deleted."""
-    deps = _make_deps(tmp_path)
-    insert_learning(deps.store, deps.embedder, "other project insight",
-                    id="c0051234c0055678", project="/other/project")
+    deps = _make_deps(tmp_path, project_id="/my/project")
+    insert_learning(
+        deps.store,
+        deps.embedder,
+        "other project insight",
+        id="c0051234c0055678",
+        project="/other/project",
+    )
 
-    with patch("crowd_control.server.os") as mock_os:
-        mock_os.getcwd.return_value = "/my/project"
-        result = await handle_delete_learning(deps, ["c0051234"])
+    result = await handle_delete_learning(deps, ["c0051234"])
 
     assert "different project" in result
     assert deps.store.count() == 1
@@ -688,15 +701,23 @@ async def test_delete_learning_cross_project_rejected(tmp_path):
 @pytest.mark.anyio
 async def test_delete_learning_ambiguous_prefix(tmp_path):
     """Ambiguous prefix matching multiple learnings is rejected."""
-    deps = _make_deps(tmp_path)
-    insert_learning(deps.store, deps.embedder, "python asyncio concurrency patterns",
-                    id="abcdabcd00000001", project="/test/project")
-    insert_learning(deps.store, deps.embedder, "javascript react component lifecycle",
-                    id="abcdabcd00000002", project="/test/project")
+    deps = _make_deps(tmp_path, project_id="/test/project")
+    insert_learning(
+        deps.store,
+        deps.embedder,
+        "python asyncio concurrency patterns",
+        id="abcdabcd00000001",
+        project="/test/project",
+    )
+    insert_learning(
+        deps.store,
+        deps.embedder,
+        "javascript react component lifecycle",
+        id="abcdabcd00000002",
+        project="/test/project",
+    )
 
-    with patch("crowd_control.server.os") as mock_os:
-        mock_os.getcwd.return_value = "/test/project"
-        result = await handle_delete_learning(deps, ["abcdabcd"])
+    result = await handle_delete_learning(deps, ["abcdabcd"])
 
     assert "ambiguous" in result
     assert deps.store.count() == 2
@@ -705,17 +726,15 @@ async def test_delete_learning_ambiguous_prefix(tmp_path):
 @pytest.mark.anyio
 async def test_delete_learning_mixed_batch(tmp_path):
     """Batch with valid, not-found, and cross-project IDs."""
-    deps = _make_deps(tmp_path)
-    insert_learning(deps.store, deps.embedder, "valid one",
-                    id="aaaa1111aaaa1111", project="/my/proj")
-    insert_learning(deps.store, deps.embedder, "other proj",
-                    id="bbbb2222bbbb2222", project="/other/proj")
+    deps = _make_deps(tmp_path, project_id="/my/proj")
+    insert_learning(
+        deps.store, deps.embedder, "valid one", id="aaaa1111aaaa1111", project="/my/proj"
+    )
+    insert_learning(
+        deps.store, deps.embedder, "other proj", id="bbbb2222bbbb2222", project="/other/proj"
+    )
 
-    with patch("crowd_control.server.os") as mock_os:
-        mock_os.getcwd.return_value = "/my/proj"
-        result = await handle_delete_learning(
-            deps, ["aaaa1111", "bbbb2222", "cccc3333"]
-        )
+    result = await handle_delete_learning(deps, ["aaaa1111", "bbbb2222", "cccc3333"])
 
     assert "Deleted 1" in result
     assert "different project" in result

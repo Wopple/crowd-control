@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from crowd_control.ingest.parser import (
     _parse_timestamp,
     encode_project_path,

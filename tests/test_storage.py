@@ -140,10 +140,14 @@ class TestFindByPrefix:
 
     def test_ambiguous_prefix(self, store, embedder):
         """Prefix matching multiple IDs returns all matches."""
-        store.add([
-            _make_learning(embedder, text="python asyncio concurrency patterns", id="abcd0001"),
-            _make_learning(embedder, text="javascript react component lifecycle", id="abcd0002"),
-        ])
+        store.add(
+            [
+                _make_learning(embedder, text="python asyncio concurrency patterns", id="abcd0001"),
+                _make_learning(
+                    embedder, text="javascript react component lifecycle", id="abcd0002"
+                ),
+            ]
+        )
         results = store.find_by_prefix("abcd")
         assert len(results) == 2
 
@@ -719,3 +723,55 @@ class TestVectorSearch:
         query_vec = [0.1] * 8
         results = store.vector_search(query_vec, limit=5)
         assert results == []
+
+
+# ---------------------------------------------------------------------------
+# update_project (migration)
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateProject:
+    def test_renames_matching_rows(self, store, embedder):
+        store.add([_make_learning(embedder, "insight a1", id="up-a1", project="/old/path")])
+        store.add([_make_learning(embedder, "insight a2", id="up-a2", project="/old/path")])
+        store.add([_make_learning(embedder, "insight b1", id="up-b1", project="/other")])
+
+        updated = store.update_project("/old/path", "my-app")
+
+        assert updated == 2
+        assert store.count(project="my-app") == 2
+        assert store.count(project="/old/path") == 0
+        assert store.count(project="/other") == 1
+
+    def test_no_matches(self, store, embedder):
+        store.add([_make_learning(embedder, "insight", id="up-nm1", project="/some/path")])
+
+        updated = store.update_project("/nonexistent", "my-app")
+
+        assert updated == 0
+        assert store.count(project="/some/path") == 1
+
+    def test_preserves_other_fields(self, store, embedder):
+        store.add(
+            [
+                _make_learning(
+                    embedder,
+                    "important insight",
+                    id="up-pf1",
+                    project="/old/path",
+                    category="gotcha",
+                    tags=["python", "async"],
+                    confidence=0.95,
+                )
+            ]
+        )
+
+        store.update_project("/old/path", "my-app")
+
+        row = store.get("up-pf1")
+        assert row is not None
+        assert row["project"] == "my-app"
+        assert row["text"] == "important insight"
+        assert row["category"] == "gotcha"
+        assert row["confidence"] == pytest.approx(0.95)
+        assert set(row["tags"]) == {"python", "async"}

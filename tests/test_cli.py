@@ -82,3 +82,11 @@ def test_export_all_and_project_conflict():
     result = runner.invoke(main, ["export", "--all", "--project", "/foo"])
     assert result.exit_code != 0
     assert "Cannot use --all and --project" in result.output
+
+
+def test_migrate_project_help():
+    runner = CliRunner()
+    result = runner.invoke(main, ["migrate-project", "--help"])
+    assert result.exit_code == 0
+    assert "--from" in result.output
+    assert "--to" in result.output

@@ -25,6 +25,7 @@ crowd-control/
 │       ├── config.py              # Configuration loading from TOML with dataclass schema, ConfigError
 │       ├── formatting.py          # Shared result formatting for CLI and MCP server
 │       ├── logging_config.py      # Logging setup: handler configuration, formatters
+│       ├── project.py             # Project identity resolution (.crowd-control file)
 │       ├── server.py              # MCP server (FastMCP) — tools, lifespan, factory, agent instructions, graceful degradation
 │       ├── hooks.py               # Hook handler logic — SessionEnd queue + worker spawning
 │       ├── worker.py              # Background ingestion worker — queue processing, retry, failure handling
@@ -61,6 +62,7 @@ crowd-control/
     ├── test_hooks.py              # Hook handler logic tests (SessionEnd, spawn_worker)
     ├── test_storage.py            # LanceDB storage, vector search, active count, has_session tests
     ├── test_pipeline.py           # End-to-end pipeline tests (mocked distiller + fake embedder)
+    ├── test_project.py            # Project identity resolution tests (.crowd-control file)
     ├── test_search.py             # Search module tests (FakeEmbedder + real LanceDB)
     ├── test_rank.py               # Ranking module tests (pure function, no DB)
     ├── test_retrieval_integration.py  # End-to-end retrieval pipeline tests
@@ -85,6 +87,7 @@ crowd-control/
 | `cli.py` | `ingest` with full pipeline, `list`, `status` with DB stats, `search` with retrieval pipeline, `export` with JSON output, `serve` with MCP server, `setup` with full auto-config, `hook session-end`, `worker` |
 | `config.py` | Implemented — TOML loading with frozen dataclass schema, ConfigError for invalid TOML |
 | `logging_config.py` | Implemented — dual-handler logging (stderr for interactive, file for trace) |
+| `project.py` | Implemented — .crowd-control file discovery, TOML parsing, project name resolution |
 | `formatting.py` | Implemented — shared result formatting (extract_display_learnings, format_results_text) |
 | `server.py` | Implemented — FastMCP server factory, lifespan with graceful degradation, 4 tools, detailed agent instructions |
 | `hooks.py` | Implemented — SessionEnd handler, queue file writing, worker spawning |

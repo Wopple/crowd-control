@@ -366,6 +366,22 @@ class LearningStore:
         self._table.delete(f"id = '{escaped}'")
         return True
 
+    def update_project(self, old_project: str, new_project: str) -> int:
+        """Re-key all learnings from *old_project* to *new_project*.
+
+        Returns the number of rows updated.
+        """
+        escaped_old = old_project.replace("'", "''")
+        count = self._table.count_rows(filter=f"project = '{escaped_old}'")
+        if count == 0:
+            return 0
+
+        self._table.update(
+            where=f"project = '{escaped_old}'",
+            values={"project": new_project},
+        )
+        return count
+
     def count(self, project: str | None = None) -> int:
         """Return the number of learnings, optionally filtered by project."""
         if project is None:

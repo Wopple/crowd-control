@@ -7,6 +7,7 @@ Crowd Control.
 
 - [Installation](#installation)
 - [CLI Commands](#cli-commands)
+- [Project Identity](#project-identity)
 - [Configuration](#configuration)
 - [Upgrading](#upgrading)
 - [How It Works](#how-it-works)
@@ -444,6 +445,56 @@ crowd-control --version     # Show version
 crowd-control --help        # Show all commands
 crowd-control -v <command>  # Verbose mode (debug output on stderr)
 ```
+
+---
+
+## Project Identity
+
+By default, Crowd Control identifies projects by their absolute directory path. If you
+rename or move a project directory, existing learnings become invisible because they are
+stored under the old path.
+
+To give a project a stable name that survives renames, create a `.crowd-control` file in
+the project root:
+
+```toml
+[project]
+name = "my-app"
+```
+
+Once this file exists, all new learnings are stored under the name `my-app` instead of
+the directory path. The name is resolved by walking up from the current directory, so it
+works from subdirectories too.
+
+The file is optional — everything works without it, using the directory path as before.
+
+### Name rules
+
+- Must not be empty or exceed 128 characters.
+- Must not contain `/` or `\` (path separators).
+- Must not look like an absolute path (start with `/` or a drive letter like `C:\`).
+
+### Name collisions
+
+If two different directories use the same project name, their learnings merge in the
+database. This is by design — it is the same mechanism that makes renames work. Choose
+distinct names if you want isolation.
+
+### Migrating existing learnings
+
+If you add a `.crowd-control` file to a project that already has learnings stored under
+its old directory path, use `migrate-project` to re-key them:
+
+```bash
+# Preview what would be migrated
+crowd-control migrate-project --from /old/path/to/project --to my-app --dry-run
+
+# Run the migration
+crowd-control migrate-project --from /old/path/to/project --to my-app
+```
+
+Verify with `crowd-control status` — the project name and learning count should reflect
+the migrated data.
 
 ---
 

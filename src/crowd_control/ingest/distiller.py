@@ -12,6 +12,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+from crowd_control.project import resolve_project
 from crowd_control.storage.models import (
     ConversationSegment,
     Learning,
@@ -308,10 +309,11 @@ def distill_segment(
     If git_sha is provided, it is used directly. Otherwise, resolved via
     git rev-parse HEAD in the project directory.
     """
-    project_path = session.project_path if session.project_path else str(Path.cwd())
+    filesystem_path = session.project_path if session.project_path else str(Path.cwd())
+    project_id = resolve_project(Path(filesystem_path))
     git_branch = session.git_branch or "unknown"
 
-    prompt = build_distillation_prompt(segment, project_path, git_branch, max_learning_chars)
+    prompt = build_distillation_prompt(segment, filesystem_path, git_branch, max_learning_chars)
     if not prompt:
         return []
 
@@ -320,7 +322,7 @@ def distill_segment(
 
     raw_learnings = response.get("learnings", [])
     if git_sha is None:
-        git_sha = _get_git_sha(project_path)
+        git_sha = _get_git_sha(filesystem_path)
 
     learnings: list[Learning] = []
     for raw in raw_learnings:
@@ -329,7 +331,7 @@ def distill_segment(
                 text=raw["text"],
                 category=LearningCategory(raw["category"]),
                 tags=raw.get("tags", []),
-                project=project_path,
+                project=project_id,
                 session_id=session.session_id,
                 git_sha=git_sha,
                 confidence=raw["confidence"],

@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -9,6 +8,7 @@ import click
 
 from crowd_control.config import ConfigError, CrowdControlConfig, load_config
 from crowd_control.ingest.parser import find_sessions, parse_session_file
+from crowd_control.project import resolve_project
 from crowd_control.storage.models import TextBlock
 
 logger = logging.getLogger(__name__)
@@ -491,6 +491,40 @@ def prune(ctx, dry_run):
     )
 
 
+@main.command(name="migrate-project")
+@click.option("--from", "old_project", required=True, help="Current project identifier.")
+@click.option("--to", "new_project", required=True, help="New project identifier.")
+@click.option("--dry-run", is_flag=True, help="Show count without updating.")
+@click.pass_context
+def migrate_project(ctx, old_project, new_project, dry_run):
+    """Re-key learnings from one project identifier to another.
+
+    Use this after adding a .crowd-control file to a project that already
+    has learnings stored under its directory path.
+    """
+    config = _get_config_or_exit(ctx)
+
+    try:
+        from crowd_control.storage.db import LearningStore
+
+        store = LearningStore(config.db_path)
+    except Exception as e:
+        click.echo(f"Database not available: {e}", err=True)
+        sys.exit(1)
+
+    count = store.count(project=old_project)
+    if count == 0:
+        click.echo(f"No learnings found for project: {old_project}")
+        return
+
+    if dry_run:
+        click.echo(f"Would migrate {count} learnings from {old_project!r} to {new_project!r}.")
+        return
+
+    updated = store.update_project(old_project, new_project)
+    click.echo(f"Migrated {updated} learnings from {old_project!r} to {new_project!r}.")
+
+
 @main.command()
 def serve():
     """Run the MCP server (stdio transport)."""
@@ -594,5 +628,5 @@ def _fmt_hms(dt) -> str:
 
 
 def _detect_project() -> str:
-    """Return the current working directory as the project path."""
-    return os.getcwd()
+    """Resolve the project identifier for the current directory."""
+    return resolve_project()

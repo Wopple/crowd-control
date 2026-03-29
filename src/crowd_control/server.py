@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -14,6 +13,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from crowd_control.config import CrowdControlConfig, load_config
 from crowd_control.embed.base import Embedder, EmbeddingError, create_embedder
 from crowd_control.formatting import format_results_text
+from crowd_control.project import resolve_project
 from crowd_control.storage.db import LearningStore
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,7 @@ class ServerDeps:
     config: CrowdControlConfig
     store: LearningStore | None
     embedder: Embedder | None
+    project_id: str = ""
 
 
 @asynccontextmanager
@@ -48,7 +49,13 @@ async def _default_lifespan(server: FastMCP) -> AsyncIterator[ServerDeps]:
         # If we get here, there's no existing table and no embedder to provide dims.
         logger.warning("LearningStore unavailable: no existing DB and no embedder")
 
-    logger.info("Lifespan: store=%s, embedder=%s", store is not None, embedder is not None)
+    project_id = resolve_project()
+    logger.info(
+        "Lifespan: store=%s, embedder=%s, project_id=%s",
+        store is not None,
+        embedder is not None,
+        project_id,
+    )
 
     if store is not None and config.ingestion.max_age_days > 0:
         pruned = await asyncio.to_thread(
@@ -59,7 +66,7 @@ async def _default_lifespan(server: FastMCP) -> AsyncIterator[ServerDeps]:
         if pruned > 0:
             logger.info("Startup prune: removed %d old learnings", pruned)
 
-    yield ServerDeps(config=config, store=store, embedder=embedder)
+    yield ServerDeps(config=config, store=store, embedder=embedder, project_id=project_id)
 
 
 def create_server(lifespan=None) -> FastMCP:
@@ -178,7 +185,7 @@ async def handle_search_learnings(
     if limit is not None:
         retrieval_config = dataclasses.replace(retrieval_config, max_results=limit)
 
-    current_project = os.getcwd()
+    current_project = deps.project_id
 
     from crowd_control.retrieve import retrieve_learnings
 
@@ -229,7 +236,7 @@ async def handle_add_learning(
             text=text,
             category=validated_category,
             tags=tags or [],
-            project=os.getcwd(),
+            project=deps.project_id,
             session_id="manual",
             confidence=1.0,
         )
@@ -317,7 +324,7 @@ async def handle_status(deps: ServerDeps) -> str:
     """Show the learnings database status and configuration."""
     from crowd_control.formatting import format_status_counts
 
-    current_project = os.getcwd()
+    current_project = deps.project_id
     auto_ingest = "enabled" if deps.config.ingestion.auto_ingest else "disabled"
     agent_ingest = "enabled" if deps.config.ingestion.agent_ingest else "disabled"
 
@@ -401,7 +408,7 @@ async def handle_delete_learning(
     except ValueError as e:
         return str(e)
 
-    current_project = os.getcwd()
+    current_project = deps.project_id
     min_prefix_len = 8
 
     deleted: list[str] = []
@@ -436,9 +443,7 @@ async def handle_delete_learning(
         await asyncio.to_thread(store.delete, full_id)
 
         snippet = match["text"][:80]
-        deleted.append(
-            f"  Deleted id={full_id[:8]} [{match['category']}]: {snippet}"
-        )
+        deleted.append(f"  Deleted id={full_id[:8]} [{match['category']}]: {snippet}")
 
     lines: list[str] = []
     if deleted:
