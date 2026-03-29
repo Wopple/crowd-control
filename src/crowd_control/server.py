@@ -19,7 +19,7 @@ from crowd_control.storage.db import LearningStore
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(frozen=True)
 class ServerDeps:
     """Shared resources available to all tool calls."""
 
@@ -43,7 +43,9 @@ async def _default_lifespan(server: FastMCP) -> AsyncIterator[ServerDeps]:
     store: LearningStore | None = None
     try:
         dims = embedder.dimensions if embedder else None
-        store = await asyncio.to_thread(LearningStore, config.db_path, dims)
+        store = await asyncio.to_thread(
+            LearningStore, config.db_path, dims, config.ingestion.dedup_threshold
+        )
     except ValueError:
         # New table needs dimensions from embedder; existing table works without.
         # If we get here, there's no existing table and no embedder to provide dims.

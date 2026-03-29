@@ -6,7 +6,6 @@ import pytest
 
 from crowd_control.storage.models import (
     ConversationSegment,
-    KnowledgeScope,
     Learning,
     LearningCategory,
     Message,
@@ -191,7 +190,7 @@ class TestLearning:
         assert len(l1.id) == 32  # uuid4 hex
 
     def test_explicit_id(self):
-        l = Learning(
+        learning = Learning(
             id="custom-id",
             text="test",
             category=LearningCategory.DEBUGGING_INSIGHT,
@@ -199,24 +198,24 @@ class TestLearning:
             session_id="s1",
             confidence=0.5,
         )
-        assert l.id == "custom-id"
+        assert learning.id == "custom-id"
 
     def test_defaults(self):
-        l = Learning(
+        learning = Learning(
             text="test",
             category=LearningCategory.PATTERN_DISCOVERY,
             project="/test",
             session_id="s1",
             confidence=0.9,
         )
-        assert l.stale is False
-        assert l.shared is False
-        assert l.tags == []
-        assert l.git_sha is None
-        assert l.active_count == 0
+        assert learning.stale is False
+        assert learning.shared is False
+        assert learning.tags == []
+        assert learning.git_sha is None
+        assert learning.active_count == 0
 
     def test_active_count_explicit(self):
-        l = Learning(
+        learning = Learning(
             text="test",
             category=LearningCategory.GOTCHA,
             project="/test",
@@ -224,18 +223,18 @@ class TestLearning:
             confidence=0.8,
             active_count=5,
         )
-        assert l.active_count == 5
+        assert learning.active_count == 5
 
     def test_default_timestamp_is_aware(self):
         """Bug 6: Learning.timestamp default must be timezone-aware."""
-        l = Learning(
+        learning = Learning(
             text="test",
             category=LearningCategory.GOTCHA,
             project="/test",
             session_id="s1",
             confidence=0.8,
         )
-        assert l.timestamp.tzinfo is not None
+        assert learning.timestamp.tzinfo is not None
 
     def test_text_at_max_length_accepted(self):
         """Text exactly at the max length should be accepted."""
@@ -262,7 +261,7 @@ class TestLearning:
             )
 
     def test_tags_normalized_to_lowercase(self):
-        l = Learning(
+        learning = Learning(
             text="test",
             category=LearningCategory.GOTCHA,
             tags=["Python", "LanceDB", "ASYNC"],
@@ -270,10 +269,10 @@ class TestLearning:
             session_id="s1",
             confidence=0.8,
         )
-        assert l.tags == ["python", "lancedb", "async"]
+        assert learning.tags == ["python", "lancedb", "async"]
 
     def test_roundtrip(self):
-        l = Learning(
+        learning = Learning(
             text="use is not None",
             category=LearningCategory.CODEBASE_CONVENTION,
             tags=["python", "style"],
@@ -282,18 +281,13 @@ class TestLearning:
             confidence=0.7,
             shared=True,
         )
-        restored = Learning.model_validate_json(l.model_dump_json())
-        assert restored.text == l.text
+        restored = Learning.model_validate_json(learning.model_dump_json())
+        assert restored.text == learning.text
         assert restored.shared is True
         assert restored.tags == ["python", "style"]
 
 
 class TestEnums:
-    def test_knowledge_scope_values(self):
-        assert KnowledgeScope.PROJECT == "project"
-        assert KnowledgeScope.SHARED == "shared"
-        assert KnowledgeScope.MIXED == "mixed"
-
     def test_learning_category_values(self):
         assert LearningCategory.ARCHITECTURE_DECISION == "architecture_decision"
         assert LearningCategory.DEBUGGING_INSIGHT == "debugging_insight"

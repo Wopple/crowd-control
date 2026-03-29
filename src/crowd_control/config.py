@@ -58,9 +58,17 @@ class IngestionConfig:
     retention_retrieval_interval_days: int = 30
 
 
+_VALID_SCOPES = frozenset({"project", "shared", "mixed"})
+
+
 @dataclass(frozen=True)
 class KnowledgeConfig:
     scope: str = "project"
+
+    def __post_init__(self):
+        if self.scope not in _VALID_SCOPES:
+            valid = ", ".join(sorted(_VALID_SCOPES))
+            raise ValueError(f"scope must be one of: {valid}")
 
 
 @dataclass(frozen=True)

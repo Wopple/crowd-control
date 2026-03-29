@@ -25,12 +25,6 @@ class LearningCategory(StrEnum):
     GOTCHA = "gotcha"
 
 
-class KnowledgeScope(StrEnum):
-    PROJECT = "project"
-    SHARED = "shared"
-    MIXED = "mixed"
-
-
 # --- Content blocks (discriminated union on "type") ---
 
 

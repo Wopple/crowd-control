@@ -320,21 +320,21 @@ class TestPrune:
             [
                 _make_learning(
                     embedder,
-                    text="old inactive",
+                    text="python asyncio event loop coroutine scheduling",
                     id="old-0",
                     timestamp=datetime(2025, 1, 1, tzinfo=UTC),
                     active_count=0,
                 ),
                 _make_learning(
                     embedder,
-                    text="old well retrieved",
+                    text="javascript react component lifecycle rendering hooks",
                     id="old-6",
                     timestamp=datetime(2025, 1, 1, tzinfo=UTC),
                     active_count=6,
                 ),
                 _make_learning(
                     embedder,
-                    text="recent inactive",
+                    text="database postgresql query optimization indexing strategies",
                     id="new-0",
                     timestamp=datetime(2025, 5, 20, tzinfo=UTC),
                     active_count=0,
@@ -357,7 +357,7 @@ class TestPrune:
                 # 91 days old: needs ceil(91/30) = 4, has 3 → pruned
                 _make_learning(
                     embedder,
-                    text="barely old learning",
+                    text="python asyncio concurrency event loop patterns",
                     id="age-91",
                     timestamp=datetime(2025, 4, 1, tzinfo=UTC),
                     active_count=3,
@@ -365,7 +365,7 @@ class TestPrune:
                 # 181 days old: needs ceil(181/30) = 7, has 5 → pruned
                 _make_learning(
                     embedder,
-                    text="very old learning",
+                    text="javascript react component lifecycle rendering hooks",
                     id="age-181",
                     timestamp=datetime(2025, 1, 1, tzinfo=UTC),
                     active_count=5,
@@ -373,7 +373,7 @@ class TestPrune:
                 # 181 days old: needs 7, has 7 → survives
                 _make_learning(
                     embedder,
-                    text="very old active learning",
+                    text="database postgresql query optimization indexing strategies",
                     id="age-181-ok",
                     timestamp=datetime(2025, 1, 1, tzinfo=UTC),
                     active_count=7,
@@ -391,7 +391,7 @@ class TestPrune:
             [
                 _make_learning(
                     embedder,
-                    text="ancient learning",
+                    text="python asyncio concurrency event loop patterns",
                     id="ancient",
                     timestamp=datetime(2020, 1, 1, tzinfo=UTC),
                     active_count=0,
@@ -412,7 +412,7 @@ class TestPrune:
             [
                 _make_learning(
                     embedder,
-                    text="recent learning",
+                    text="python asyncio concurrency event loop patterns",
                     id="recent",
                     timestamp=datetime(2025, 5, 1, tzinfo=UTC),
                     active_count=0,

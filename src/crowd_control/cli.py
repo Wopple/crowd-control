@@ -356,7 +356,7 @@ def add(ctx, text, category, tags, project):
 
     # 3. Open store (bootstraps DB if needed)
     try:
-        store = LearningStore(config.db_path, embedder.dimensions)
+        store = LearningStore(config.db_path, embedder.dimensions, config.ingestion.dedup_threshold)
     except ValueError as e:
         click.echo(f"Database error: {e}", err=True)
         sys.exit(1)

@@ -151,7 +151,7 @@ class LearningStore:
         self,
         db_path: str,
         vector_dimensions: int | None = None,
-        dedup_threshold: float = 0.95,
+        dedup_threshold: float = 0.90,
     ):
         """Open or create the LanceDB database and learnings table.
 
@@ -160,6 +160,7 @@ class LearningStore:
             vector_dimensions: Length of embedding vectors. Required when creating
                 a new table. If table already exists, read from schema.
             dedup_threshold: Cosine similarity threshold for near-duplicate rejection.
+                Default matches IngestionConfig.dedup_threshold.
         """
         self._dedup_threshold = dedup_threshold
         expanded = Path(db_path).expanduser()

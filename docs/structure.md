@@ -26,7 +26,7 @@ crowd-control/
 │       ├── formatting.py          # Shared result formatting for CLI and MCP server
 │       ├── logging_config.py      # Logging setup: handler configuration, formatters
 │       ├── project.py             # Project identity resolution (.crowd-control file)
-│       ├── server.py              # MCP server (FastMCP) — tools, lifespan, factory, agent instructions, graceful degradation
+│       ├── server.py              # MCP server (FastMCP) — tools, lifespan, factory, graceful degradation
 │       ├── hooks.py               # Hook handler logic — SessionEnd queue + worker spawning
 │       ├── worker.py              # Background ingestion worker — queue processing, retry, failure handling
 │       ├── setup.py               # Setup logic — MCP config, hook config, prerequisites, JSON merging
@@ -89,7 +89,7 @@ crowd-control/
 | `logging_config.py` | Implemented — dual-handler logging (stderr for interactive, file for trace) |
 | `project.py` | Implemented — .crowd-control file discovery, TOML parsing, project name resolution |
 | `formatting.py` | Implemented — shared result formatting (extract_display_learnings, format_results_text) |
-| `server.py` | Implemented — FastMCP server factory, lifespan with graceful degradation, 4 tools, detailed agent instructions |
+| `server.py` | Implemented — FastMCP server factory, lifespan with graceful degradation, tools, detailed agent instructions |
 | `hooks.py` | Implemented — SessionEnd handler, queue file writing, worker spawning |
 | `worker.py` | Implemented — queue processing, retry with attempt tracking, failed job handling |
 | `setup.py` | Implemented — MCP config, hook config, prerequisites, JSON merging, global/project scope |
