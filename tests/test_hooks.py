@@ -12,6 +12,7 @@ from crowd_control.config import CrowdControlConfig, IngestionConfig
 from crowd_control.hooks import (
     _CREATE_NEW_PROCESS_GROUP,
     _DETACHED_PROCESS,
+    INGEST_MARKER_ENV,
     _build_worker_command,
     _detach_kwargs,
     handle_session_end_hook,
@@ -116,6 +117,24 @@ class TestHandleSessionEndHook:
         # No queue file written
         queue_dir = Path(config.storage_dir) / "queue"
         assert not queue_dir.exists() or not list(queue_dir.glob("*.json"))
+
+    def test_skips_when_ingest_marker_set(self, config, session_file, monkeypatch):
+        """When INGEST_MARKER_ENV is set, the hook must refuse to queue.
+
+        This prevents the SessionEnd hook fired by a distillation `claude -p`
+        subprocess from queuing another ingestion job (infinite recursion).
+        """
+        monkeypatch.setenv(INGEST_MARKER_ENV, "1")
+        event = _make_event(session_file)
+
+        with patch("crowd_control.hooks.spawn_worker") as mock_spawn:
+            result = handle_session_end_hook(event, config)
+
+        assert result.skipped_reason is not None
+        assert "recursive" in result.skipped_reason.lower()
+        queue_dir = Path(config.storage_dir) / "queue"
+        assert not queue_dir.exists() or not list(queue_dir.glob("*.json"))
+        mock_spawn.assert_not_called()
 
     def test_sanitizes_session_id(self, config, session_file):
         event = _make_event(session_file, session_id="../../etc/passwd")

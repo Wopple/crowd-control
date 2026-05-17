@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from crowd_control.hooks import INGEST_MARKER_ENV
 from crowd_control.ingest.distiller import (
     LEARNING_EXTRACTION_SCHEMA,
     DistillationError,
@@ -284,6 +285,23 @@ class TestCallClaude:
     def test_rejects_inside_claude_code(self):
         with pytest.raises(DistillationError, match="CLAUDECODE"):
             call_claude("test prompt", LEARNING_EXTRACTION_SCHEMA)
+
+    @patch.dict("os.environ", {}, clear=True)
+    @patch("crowd_control.ingest.distiller.subprocess.run")
+    def test_sets_ingest_marker_on_subprocess(self, mock_run):
+        """call_claude must pass INGEST_MARKER_ENV=1 to the claude subprocess.
+
+        This is the producer half of the recursive-ingestion guard. The
+        consumer half is in tests/test_hooks.py.
+        """
+        response = _load_fixture_response()
+        mock_run.return_value = self._mock_result(stdout=json.dumps(response))
+
+        call_claude("test prompt", LEARNING_EXTRACTION_SCHEMA)
+
+        call_kwargs = mock_run.call_args.kwargs
+        assert "env" in call_kwargs, "subprocess.run must be given an explicit env"
+        assert call_kwargs["env"].get(INGEST_MARKER_ENV) == "1"
 
     @patch.dict("os.environ", {}, clear=True)
     @patch("crowd_control.ingest.distiller.time.sleep")

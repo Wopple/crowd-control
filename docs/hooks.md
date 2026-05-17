@@ -70,12 +70,42 @@ On POSIX systems (macOS, Linux), the worker is detached via ``start_new_session`
 ``DETACHED_PROCESS`` creation flags are used instead. This branching is isolated
 in ``_detach_kwargs()`` so the rest of ``spawn_worker`` is platform-agnostic.
 
-### CLAUDECODE environment variable
+### Preventing recursive ingestion
 
-The worker calls `claude -p` for distillation. Claude Code sets a `CLAUDECODE`
-environment variable that prevents recursive invocation. The SessionEnd hook strips
-this variable from the spawned worker's environment. This is safe because the session
-has already ended and the worker is fully detached.
+The worker calls `claude -p` for distillation. When that subprocess exits, the
+globally-registered `SessionEnd` hook fires for it — which, without protection,
+would queue another ingestion, spawning another worker, ad infinitum. Two
+protections work together:
+
+#### Primary: --no-session-persistence
+
+The worker invokes `claude -p` with `--no-session-persistence`, so the
+distillation subprocess does not write a transcript file. The hook fires but
+its `transcript_path.exists()` check fails, and the session is skipped without
+queuing.
+
+#### Secondary: CROWD_CONTROL_INGESTING marker
+
+The worker also sets `CROWD_CONTROL_INGESTING=1` on the `claude -p` subprocess
+environment (via `subprocess.run(env=...)` in `distiller.call_claude`). The
+hook checks this variable as the very first step of `handle_session_end_hook`.
+If it is set, the hook returns immediately with skip reason
+`"recursive ingestion guard (CROWD_CONTROL_INGESTING set)"` and logs at
+`WARNING` level.
+
+This is a *designed* guard, not an emergent property: if a future change to
+`claude -p` causes transcripts to be written under `--no-session-persistence`,
+or if that flag is ever removed, this marker still prevents recursion. The
+skip reason includes the variable name so the cause is greppable in logs.
+
+#### CLAUDECODE stripping (unrelated)
+
+Separately, the hook *strips* `CLAUDECODE` from the worker's spawned
+environment. This is a different invariant: `CLAUDECODE` is set by Claude Code
+to mean "you are inside an interactive session", and `claude -p` refuses to
+run when it is set. The worker must launch without it. This protection is
+unrelated to recursion and is required even if the recursion guards above were
+removed.
 
 ### Concurrency
 

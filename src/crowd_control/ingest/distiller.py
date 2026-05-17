@@ -12,6 +12,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+from crowd_control.hooks import INGEST_MARKER_ENV
 from crowd_control.project import resolve_project
 from crowd_control.storage.models import (
     ConversationSegment,
@@ -222,6 +223,7 @@ def call_claude(
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                env={**os.environ, INGEST_MARKER_ENV: "1"},
             )
         except FileNotFoundError:
             raise DistillationError("claude CLI not found. Is it installed and on PATH?")

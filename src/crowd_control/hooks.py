@@ -23,6 +23,11 @@ logger = logging.getLogger(__name__)
 
 _MAX_SESSION_ID_LENGTH = 200
 
+# Set by the distillation worker on every `claude -p` subprocess so that
+# the SessionEnd hook fired by that subprocess can recognise itself and
+# refuse to queue another ingestion job. See docs/hooks.md.
+INGEST_MARKER_ENV = "CROWD_CONTROL_INGESTING"
+
 # Windows process creation flags, defined here because the subprocess
 # module only exposes these constants on Windows.
 _CREATE_NEW_PROCESS_GROUP = 0x00000200
@@ -52,6 +57,22 @@ def handle_session_end_hook(
     Returns:
         QueueResult indicating what happened.
     """
+    # 0. Recursive-ingestion guard. The distillation worker spawns
+    #    `claude -p` with INGEST_MARKER_ENV set on the subprocess
+    #    environment. When that subprocess exits, this hook fires for it;
+    #    refuse to queue so we do not infinitely recurse.
+    if os.environ.get(INGEST_MARKER_ENV):
+        logger.warning(
+            "SessionEnd hook fired inside distillation subprocess "
+            "(%s set); skipping to prevent recursive ingestion",
+            INGEST_MARKER_ENV,
+        )
+        return QueueResult(
+            session_path=None,
+            queue_file=None,
+            skipped_reason="recursive ingestion guard (CROWD_CONTROL_INGESTING set)",
+        )
+
     # 1. Validate required fields
     required = ["session_id", "transcript_path", "cwd"]
     missing = [f for f in required if f not in event]

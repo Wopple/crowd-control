@@ -59,6 +59,11 @@ learnings with text, category, tags, and confidence fields.
 The response JSON is expected to contain a `structured_output` key wrapping the actual
 schema-conformant output.
 
+`call_claude` also sets `CROWD_CONTROL_INGESTING=1` on the subprocess
+environment so the SessionEnd hook fired by the exiting `claude -p` process
+can recognise itself and skip queuing. See [hooks.md](hooks.md) for the
+layered defence against recursive ingestion.
+
 ### Learning Construction
 
 For each learning returned by the LLM, `distill_segment` constructs a `Learning`
