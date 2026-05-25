@@ -9,7 +9,8 @@ start instead of rebuilding context from scratch.
 After each Claude Code session ends, Crowd Control:
 
 1. Parses the session transcript (JSONL)
-2. Sends conversation segments to Claude Haiku, which extracts discrete **learnings** —
+2. Sends conversation segments to a local Ollama LLM (default `qwen3:8b`) or to
+   Claude (`claude -p --model haiku`) to extract discrete **learnings** —
    architecture decisions, debugging insights, gotchas, conventions, etc.
 3. Embeds each learning into a vector (via Ollama, Voyage, or OpenAI)
 4. Stores the vectors in a local LanceDB database
@@ -22,8 +23,9 @@ frequency.
 
 | Dependency | Role |
 |------------|------|
-| Claude Code CLI (`claude -p`) | Distillation — extracts learnings from transcripts |
+| Ollama (`qwen3:8b`) | Default distillation provider (local, free) |
 | Ollama (`nomic-embed-text`) | Default embedding provider (local, free) |
+| Claude Code CLI (`claude -p`) | Optional — used only when `[distillation] model = "claude-code:..."` |
 | LanceDB | Embedded vector database (no server, stored at `~/.crowd-control/db/`) |
 | FastMCP | MCP server framework (stdio transport) |
 | Click | CLI framework |

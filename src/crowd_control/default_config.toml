@@ -14,7 +14,10 @@ model = "nomic-embed-text"
 # api_key_env = "VOYAGE_API_KEY"   # env var name, only needed for API providers
 
 [distillation]
-model = "haiku"                     # Claude Code model alias (passed to claude -p --model)
+# Format: "<provider>:<model>" or a legacy alias.
+# Examples: "ollama:qwen3:8b", "claude-code:haiku", "haiku" (legacy).
+# Bare "ollama" or "claude-code" picks the provider's default model.
+model = "ollama:qwen3:8b"
 max_learnings_per_session = 20
 
 [retrieval]

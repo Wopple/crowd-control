@@ -82,7 +82,15 @@ def fake_embedder():
 
 @pytest.fixture
 def pipeline_config(tmp_path):
-    return CrowdControlConfig(storage_dir=str(tmp_path / "cc"))
+    # Use the Claude provider in tests so the factory does not require the
+    # optional `ollama` package. distill_session is mocked, so no real LLM
+    # call ever happens.
+    from crowd_control.config import DistillationConfig
+
+    return CrowdControlConfig(
+        storage_dir=str(tmp_path / "cc"),
+        distillation=DistillationConfig(model="claude-code:haiku"),
+    )
 
 
 class TestIngestEndToEnd:

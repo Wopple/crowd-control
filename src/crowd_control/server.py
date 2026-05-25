@@ -325,6 +325,7 @@ async def handle_ingest_session(
 async def handle_status(deps: ServerDeps) -> str:
     """Show the learnings database status and configuration."""
     from crowd_control.formatting import format_status_counts
+    from crowd_control.ingest.llm.status import check_distillation_status
 
     current_project = deps.project_id
     auto_ingest = "enabled" if deps.config.ingestion.auto_ingest else "disabled"
@@ -336,18 +337,33 @@ async def handle_status(deps: ServerDeps) -> str:
         else f"{deps.config.embedding.provider}/{deps.config.embedding.model} (unavailable)"
     )
 
+    distillation_status = await asyncio.to_thread(
+        check_distillation_status, deps.config.distillation
+    )
+    distillation_lines = [
+        "Distillation:",
+        f"  provider: {distillation_status.provider}",
+        f"  model:    {distillation_status.model}",
+        f"  ready:    {'yes' if distillation_status.ready else 'no'}",
+    ]
+    if distillation_status.hint:
+        distillation_lines.append(f"  hint:     {distillation_status.hint}")
+
     if deps.store is None:
-        return (
-            f"Database: {deps.config.db_path} (not initialized)\n"
-            f"Project: {current_project}\n"
-            f"Learnings: 0\n"
-            f"Tags: (none)\n"
-            f"Embedding: {embedder_status}\n"
-            f"Scope: {deps.config.knowledge.scope}\n"
-            f"Auto-ingest: {auto_ingest}\n"
-            f"Agent ingest: {agent_ingest}\n"
-            f"Retrieval: max_results={deps.config.retrieval.max_results}, "
-            f"max_tokens={deps.config.retrieval.max_tokens}"
+        return "\n".join(
+            [
+                f"Database: {deps.config.db_path} (not initialized)",
+                f"Project: {current_project}",
+                "Learnings: 0",
+                "Tags: (none)",
+                f"Embedding: {embedder_status}",
+                *distillation_lines,
+                f"Scope: {deps.config.knowledge.scope}",
+                f"Auto-ingest: {auto_ingest}",
+                f"Agent ingest: {agent_ingest}",
+                f"Retrieval: max_results={deps.config.retrieval.max_results}, "
+                f"max_tokens={deps.config.retrieval.max_tokens}",
+            ]
         )
 
     def _get_status_data(
@@ -382,6 +398,7 @@ async def handle_status(deps: ServerDeps) -> str:
     lines.extend(
         [
             f"Embedding: {embedder_status}",
+            *distillation_lines,
             f"Scope: {deps.config.knowledge.scope}",
             f"Auto-ingest: {auto_ingest}",
             f"Agent ingest: {agent_ingest}",

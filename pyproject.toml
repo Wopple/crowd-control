@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "crowd-control"
-version = "0.0.7"
+version = "0.0.8"
 description = "Learnings retention system for Claude Code"
 readme = "README.md"
 license = "MIT"
@@ -34,7 +34,10 @@ Homepage = "https://github.com/daniel/crowd-control"
 Issues = "https://github.com/daniel/crowd-control/issues"
 
 [project.optional-dependencies]
-ollama = ["ollama"]
+# OllamaLLM requires `format=<schema>` constrained decoding, added in
+# ollama-python 0.4.0. An older client silently drops the `format` arg and
+# the LLM produces free-form text, which then fails JSON parsing.
+ollama = ["ollama>=0.4.0"]
 voyage = ["voyageai"]
 openai = ["openai"]
 

@@ -22,8 +22,8 @@ Crowd Control.
 ### Prerequisites
 
 - **Python 3.11+** — uses `tomllib` from the standard library
-- **[Claude Code](https://claude.ai/claude-code)** — installed and authenticated (Crowd Control uses `claude -p` for distillation)
-- **[Ollama](https://ollama.ai)** — for local embeddings (default provider)
+- **[Ollama](https://ollama.ai)** — runs both embedding (default) and distillation (default) locally
+- **[Claude Code](https://claude.ai/claude-code)** — optional; only required when the distillation provider is set to `claude-code`
 
 ### Step 1: Install Ollama
 
@@ -35,14 +35,19 @@ brew install ollama
 
 Or download from [ollama.ai](https://ollama.ai) for macOS, Linux, or Windows.
 
-### Step 2: Pull the embedding model
+### Step 2: Pull the embedding and distillation models
 
 ```bash
-ollama pull nomic-embed-text
+ollama pull nomic-embed-text   # embedding (~274 MB)
+ollama pull qwen3:8b           # distillation (~5 GB)
 ```
 
-This downloads the `nomic-embed-text` model (~274 MB), which Crowd Control uses to
-convert learnings into vectors for semantic search.
+`nomic-embed-text` turns learnings into vectors for semantic search.
+`qwen3:8b` extracts learnings from session transcripts.
+
+You can pick a different distillation model — see
+[Choosing a distillation model](#choosing-a-distillation-model) for the
+trade-offs.
 
 ### Step 3: Start Ollama
 
@@ -182,7 +187,7 @@ crowd-control ingest --concurrency 4    # Limit parallel distillation requests
 |--------|---------|-------------|
 | `PATH` | most recent session | Path to a `.jsonl` session transcript |
 | `--dry-run` | off | Parse and display session structure without distilling or storing |
-| `--concurrency` | `8` | Maximum parallel `claude -p` distillation requests |
+| `--concurrency` | provider default | Max parallel distillation requests. Defaults to the LLM provider's recommendation (`claude-code`: 8; `ollama`: 1) |
 
 Output on success:
 
@@ -545,8 +550,80 @@ Provider comparison:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `model` | string | `"haiku"` | Claude model alias for distillation (passed to `claude -p --model`) |
+| `model` | string | `"ollama:qwen3:8b"` | Provider and model — see resolution table below |
 | `max_learnings_per_session` | int | `20` | Maximum learnings extracted from a single session |
+
+#### Model identifier grammar
+
+The `model` field encodes both provider and model as a single string. Resolution
+table (first match wins):
+
+| `model` value             | Resolves to                                |
+|---------------------------|--------------------------------------------|
+| `ollama:<tag>`            | provider=`ollama`, model=`<tag>`           |
+| `claude-code:<alias>`     | provider=`claude-code`, model=`<alias>`    |
+| `haiku` / `sonnet` / `opus` / `claude-*` | legacy alias → `claude-code` |
+| `ollama`                  | `ollama` + default `qwen3:8b`              |
+| `claude-code`             | `claude-code` + default `haiku`            |
+
+Provider prefixes are case-sensitive. Bare legacy aliases (e.g. `model = "haiku"`)
+continue to work for upgraded installs and emit an INFO log line on first load
+telling you the canonical form (`claude-code:haiku`) to write explicitly.
+
+#### Choosing a distillation model
+
+Distillation extracts learnings from transcript segments and benefits from
+strong instruction-following and reliable JSON-schema adherence. Segments are
+truncated to 30 000 characters so 32K+ context is plenty.
+
+| Tier        | Model              | RAM    | Notes                                          |
+|-------------|--------------------|--------|------------------------------------------------|
+| Small       | `qwen3:4b`         | ~3 GB  | Fast, acceptable for laptops                   |
+| **Balanced**| **`qwen3:8b`**     | ~5 GB  | **Default** — strong instruction following     |
+| High        | `qwen3:14b`        | ~9 GB  | Closest local match to Claude Haiku quality    |
+
+To switch:
+
+```bash
+ollama pull qwen3:14b   # or qwen3:4b
+```
+
+```toml
+[distillation]
+model = "ollama:qwen3:14b"
+```
+
+#### Performance expectations
+
+Distillation on a local LLM is noticeably slower than on the Claude API.
+Ballpark per-segment latency for `qwen3:8b`:
+
+| Hardware                       | Time per segment |
+|--------------------------------|------------------|
+| Apple Silicon (M-series, MPS)  | 5–15 s           |
+| NVIDIA RTX-class GPU           | 3–10 s           |
+| CPU-only                       | 30–60 s          |
+
+A 30-segment session on a CPU-only box can take 15–30 minutes. Because
+ingestion runs in the background via the SessionEnd hook, this latency does
+not block your editor — but recent sessions take a while to become searchable.
+
+#### Using the Claude provider
+
+If you'd rather use Anthropic's Claude API via `claude -p`:
+
+```toml
+[distillation]
+model = "claude-code:haiku"
+```
+
+This requires Claude Code installed and authenticated.
+
+#### Upgrading from older versions
+
+Existing installs with `model = "haiku"` (no provider prefix) continue to work
+unchanged — the value resolves to `claude-code:haiku`. To switch to local
+Ollama, pull `qwen3:8b` and change the value to `"ollama:qwen3:8b"`.
 
 ### `[retrieval]`
 
@@ -1051,6 +1128,32 @@ Is your embedding provider (ollama) running?
 3. If missing, run `crowd-control setup` again
 4. Restart Claude Code after setup (the MCP config is read at startup)
 5. Verify the `crowd-control` binary is on the PATH that Claude Code uses
+
+### Distillation: "Model not pulled"
+
+```
+Model 'qwen3:8b' not pulled. Run: ollama pull qwen3:8b
+```
+
+Run the suggested command. `crowd-control status` confirms readiness after the
+pull completes.
+
+### Distillation: "Ollama not running"
+
+The Ollama daemon must be running for local distillation:
+
+```bash
+ollama serve            # or launch the Ollama desktop app
+ollama list             # confirm it responds
+```
+
+### Distillation is slow
+
+Local LLM inference on CPU is the most likely cause. Options:
+
+- Use a smaller model: `model = "ollama:qwen3:4b"` after `ollama pull qwen3:4b`
+- Switch to the Claude API: `model = "claude-code:haiku"` (requires Claude Code)
+- Run on a GPU-equipped machine — see [Performance expectations](#performance-expectations)
 
 ### Sessions not being ingested automatically
 

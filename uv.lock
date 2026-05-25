@@ -386,7 +386,7 @@ requires-dist = [
     { name = "click" },
     { name = "lancedb", specifier = "==0.29.2" },
     { name = "mcp", extras = ["cli"] },
-    { name = "ollama", marker = "extra == 'ollama'" },
+    { name = "ollama", marker = "extra == 'ollama'", specifier = ">=0.4.0" },
     { name = "openai", marker = "extra == 'openai'" },
     { name = "pydantic" },
     { name = "voyageai", marker = "extra == 'voyage'" },

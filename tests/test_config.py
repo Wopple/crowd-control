@@ -31,7 +31,9 @@ def test_load_partial_config(tmp_path):
     assert config.embedding.provider == "voyage"
     assert config.embedding.model == "voyage-code-3"
     # Unspecified sections use defaults
-    assert config.distillation.model == "haiku"
+    assert config.distillation.model == "ollama:qwen3:8b"
+    assert config.distillation.resolved_provider == "ollama"
+    assert config.distillation.resolved_model_id == "qwen3:8b"
     assert config.ingestion.dedup_threshold == 0.90
 
 
@@ -77,6 +79,8 @@ scope = "shared"
         provider="openai", model="text-embedding-3-small", api_key_env="MY_KEY"
     )
     assert config.distillation.model == "sonnet"
+    assert config.distillation.resolved_provider == "claude"
+    assert config.distillation.resolved_model_id == "sonnet"
     assert config.distillation.max_learnings_per_session == 10
     assert config.retrieval.max_results == 5
     assert config.retrieval.recency_half_life_days == 14.0
@@ -92,6 +96,40 @@ scope = "shared"
         retention_retrieval_interval_days=15,
     )
     assert config.knowledge.scope == "shared"
+
+
+def test_legacy_distillation_alias_logs_info(tmp_path, caplog):
+    """Bare legacy `model = 'haiku'` should still work and emit an INFO line."""
+    import logging
+
+    config_file = tmp_path / "config.toml"
+    config_file.write_text('[distillation]\nmodel = "haiku"\n')
+    with caplog.at_level(logging.INFO, logger="crowd_control.config"):
+        config = load_config(config_file)
+    assert config.distillation.resolved_provider == "claude"
+    assert config.distillation.resolved_model_id == "haiku"
+    assert any("resolved to claude-code:haiku" in r.message for r in caplog.records)
+
+
+def test_prefixed_distillation_model_no_info_log(tmp_path, caplog):
+    """Explicit prefixed form should not emit the legacy-alias INFO line."""
+    import logging
+
+    config_file = tmp_path / "config.toml"
+    config_file.write_text('[distillation]\nmodel = "ollama:qwen3:8b"\n')
+    with caplog.at_level(logging.INFO, logger="crowd_control.config"):
+        load_config(config_file)
+    assert not any("resolved to" in r.message for r in caplog.records)
+
+
+def test_invalid_distillation_model_raises_with_path(tmp_path):
+    """ConfigError from DistillationConfig should be re-raised with the file path."""
+    from crowd_control.config import ConfigError
+
+    config_file = tmp_path / "config.toml"
+    config_file.write_text('[distillation]\nmodel = "gemini"\n')
+    with pytest.raises(ConfigError, match=str(config_file)):
+        load_config(config_file)
 
 
 def test_expand_tilde_in_db_path():

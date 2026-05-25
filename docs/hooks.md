@@ -87,7 +87,8 @@ queuing.
 #### Secondary: CROWD_CONTROL_INGESTING marker
 
 The worker also sets `CROWD_CONTROL_INGESTING=1` on the `claude -p` subprocess
-environment (via `subprocess.run(env=...)` in `distiller.call_claude`). The
+environment (via `subprocess.run(env=...)` in
+`ingest.llm.claude.ClaudeCLILLM.generate_structured`). The
 hook checks this variable as the very first step of `handle_session_end_hook`.
 If it is set, the hook returns immediately with skip reason
 `"recursive ingestion guard (CROWD_CONTROL_INGESTING set)"` and logs at

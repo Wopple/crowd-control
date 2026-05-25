@@ -1,18 +1,20 @@
-"""LLM-powered learning extraction via claude -p CLI."""
+"""LLM-powered learning extraction (orchestration).
+
+The actual LLM calls live in `crowd_control.ingest.llm.*`. This module owns
+the prompt template, the JSON schema, segment filtering, and the concurrent
+session-level orchestration — all provider-agnostic.
+"""
 
 from __future__ import annotations
 
-import json
 import logging
-import os
 import subprocess
 import threading
-import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from crowd_control.hooks import INGEST_MARKER_ENV
+from crowd_control.ingest.llm.base import DistillationError, DistillerLLM
 from crowd_control.project import resolve_project
 from crowd_control.storage.models import (
     ConversationSegment,
@@ -22,6 +24,17 @@ from crowd_control.storage.models import (
     Session,
     ThinkingBlock,
 )
+
+# Re-export so existing callers can `from crowd_control.ingest.distiller import DistillationError`.
+__all__ = [
+    "LEARNING_EXTRACTION_SCHEMA",
+    "DistillationError",
+    "build_distillation_prompt",
+    "distill_segment",
+    "distill_session",
+    "is_segment_worth_distilling",
+    "truncate_segment_text",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -126,10 +139,6 @@ Git branch: {git_branch}
 --- End transcript ---"""
 
 
-class DistillationError(Exception):
-    """Raised when distillation fails."""
-
-
 def truncate_segment_text(text: str, max_chars: int = 30000) -> str:
     """Truncate segment text if it exceeds max_chars, keeping head and tail."""
     if len(text) <= max_chars:
@@ -146,9 +155,6 @@ def build_distillation_prompt(
 ) -> str:
     """Build the distillation prompt for a segment.
 
-    Accepts already-resolved project_path and git_branch — callers are responsible
-    for fallback logic (e.g. defaulting empty project_path to cwd).
-
     Returns empty string if segment text is too short (< 50 chars after truncation).
     """
     segment_text = segment.to_prompt_text(include_thinking=False)
@@ -163,119 +169,6 @@ def build_distillation_prompt(
         git_branch=git_branch,
         segment_text=segment_text,
     )
-
-
-def _extract_structured_output(parsed: dict | list) -> dict | None:
-    """Extract structured_output from Claude CLI response.
-
-    Handles two formats:
-    - JSON array of streaming events (current): find the "result"-type element
-    - Single JSON object (legacy): look for structured_output directly
-    """
-    if isinstance(parsed, list):
-        for event in reversed(parsed):
-            if isinstance(event, dict) and event.get("type") == "result":
-                return event.get("structured_output")
-        return None
-    if isinstance(parsed, dict):
-        return parsed.get("structured_output")
-    return None
-
-
-def call_claude(
-    prompt: str,
-    json_schema: dict,
-    model: str = "haiku",
-    timeout: int = 120,
-) -> dict:
-    """Call claude -p CLI and return parsed structured output.
-
-    Retries up to 2 times (3 total attempts) on retryable errors with backoff.
-    """
-    # Check if running inside Claude Code — non-retryable
-    if os.environ.get("CLAUDECODE"):
-        raise DistillationError(
-            "Cannot call claude -p from inside Claude Code (CLAUDECODE env var is set)"
-        )
-
-    schema_json = json.dumps(json_schema, separators=(",", ":"))
-    cmd = [
-        "claude",
-        "-p",
-        "--model",
-        model,
-        "--output-format",
-        "json",
-        "--json-schema",
-        schema_json,
-        "--no-session-persistence",
-    ]
-
-    max_retries = 2
-    backoff = [2, 5]
-    last_error: Exception | None = None
-
-    for attempt in range(max_retries + 1):
-        try:
-            result = subprocess.run(
-                cmd,
-                input=prompt,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                env={**os.environ, INGEST_MARKER_ENV: "1"},
-            )
-        except FileNotFoundError:
-            raise DistillationError("claude CLI not found. Is it installed and on PATH?")
-        except subprocess.TimeoutExpired as e:
-            last_error = DistillationError(f"claude CLI timed out after {timeout}s")
-            if attempt < max_retries:
-                logger.warning(
-                    "claude CLI timed out (attempt %d/%d), retrying in %ds",
-                    attempt + 1,
-                    max_retries + 1,
-                    backoff[attempt],
-                )
-                time.sleep(backoff[attempt])
-                continue
-            raise last_error from e
-
-        if result.returncode != 0:
-            last_error = DistillationError(
-                f"claude CLI exited with code {result.returncode}: {result.stderr[:200]}"
-            )
-            if attempt < max_retries:
-                logger.warning(
-                    "claude CLI failed with exit code %d (attempt %d/%d), retrying in %ds",
-                    result.returncode,
-                    attempt + 1,
-                    max_retries + 1,
-                    backoff[attempt],
-                )
-                time.sleep(backoff[attempt])
-                continue
-            raise last_error
-
-        # Parse output — JSON parse failure is non-retryable
-        logger.debug("claude CLI returned %d bytes of output", len(result.stdout))
-        try:
-            parsed = json.loads(result.stdout)
-        except json.JSONDecodeError as e:
-            raise DistillationError(
-                f"claude CLI returned invalid JSON (length={len(result.stdout)}): {e}"
-            ) from e
-
-        # Extract structured_output from response.
-        # The CLI returns a JSON array of streaming events; the structured_output
-        # is on the final "result"-type element. Also handles the legacy single-object format.
-        structured_output = _extract_structured_output(parsed)
-        if structured_output is None:
-            raise DistillationError("claude CLI response missing 'structured_output' key")
-
-        return structured_output
-
-    # Should not reach here, but just in case
-    raise last_error or DistillationError("Unexpected retry exhaustion")
 
 
 def _get_git_sha(project_path: str) -> str | None:
@@ -300,17 +193,11 @@ def _get_git_sha(project_path: str) -> str | None:
 def distill_segment(
     segment: ConversationSegment,
     session: Session,
-    model: str = "haiku",
+    llm: DistillerLLM,
     max_learning_chars: int = 2000,
     git_sha: str | None = None,
 ) -> list[Learning]:
-    """Distill a single conversation segment into learnings.
-
-    Returns a list of Learning objects extracted by the LLM.
-
-    If git_sha is provided, it is used directly. Otherwise, resolved via
-    git rev-parse HEAD in the project directory.
-    """
+    """Distill a single conversation segment into learnings."""
     filesystem_path = session.project_path if session.project_path else str(Path.cwd())
     project_id = resolve_project(Path(filesystem_path))
     git_branch = session.git_branch or "unknown"
@@ -320,7 +207,7 @@ def distill_segment(
         return []
 
     logger.debug("Distill segment: prompt size=%d chars", len(prompt))
-    response = call_claude(prompt, LEARNING_EXTRACTION_SCHEMA, model=model)
+    response = llm.generate_structured(prompt, LEARNING_EXTRACTION_SCHEMA)
 
     raw_learnings = response.get("learnings", [])
     if git_sha is None:
@@ -353,13 +240,7 @@ def distill_segment(
 
 
 def is_segment_worth_distilling(segment: ConversationSegment) -> bool:
-    """Check whether a segment has enough content to be worth distilling.
-
-    Rejects segments that:
-    - Have fewer than 2 messages
-    - Contain no assistant messages
-    - Have only empty thinking blocks as assistant content
-    """
+    """Check whether a segment has enough content to be worth distilling."""
     if len(segment.messages) < 2:
         return False
 
@@ -376,22 +257,15 @@ def is_segment_worth_distilling(segment: ConversationSegment) -> bool:
 
 def distill_session(
     session: Session,
-    model: str = "haiku",
+    llm: DistillerLLM,
     max_learnings: int = 20,
     max_learning_chars: int = 2000,
-    max_workers: int = 8,
+    max_workers: int | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[Learning]:
     """Distill all qualifying segments in a session into learnings.
 
-    Processes segments concurrently using a thread pool. Each segment is
-    independent — no shared mutable state flows between distillation calls.
-
-    Filters out trivial segments (too few messages, no assistant content).
-    Caps results at max_learnings by confidence descending (preserving order for ties).
-
-    The progress_callback receives (completed_count, total) after each segment finishes.
-    Completions may arrive out of original segment order.
+    If max_workers is None, uses the LLM's recommended_concurrency.
     """
     qualifying_segments = [seg for seg in session.segments if is_segment_worth_distilling(seg)]
 
@@ -399,15 +273,19 @@ def distill_session(
     if total == 0:
         return []
 
-    # Resolve git SHA once for all segments
     project_path = session.project_path if session.project_path else str(Path.cwd())
     git_sha = _get_git_sha(project_path)
 
+    if max_workers is None:
+        max_workers = llm.recommended_concurrency
     effective_workers = min(max_workers, total)
+
     logger.info(
-        "Distilling %d qualifying segments with %d workers",
-        total,
+        "distillation: provider=%s model=%s concurrency=%d segments=%d",
+        llm.provider_name,
+        llm.model_id,
         effective_workers,
+        total,
     )
 
     indexed_learnings: list[tuple[int, list[Learning]]] = []
@@ -418,7 +296,7 @@ def distill_session(
         return index, distill_segment(
             seg,
             session,
-            model=model,
+            llm,
             max_learning_chars=max_learning_chars,
             git_sha=git_sha,
         )
@@ -449,13 +327,11 @@ def distill_session(
                 if progress_callback:
                     progress_callback(completed, total)
 
-    # Flatten learnings in original segment order
     indexed_learnings.sort(key=lambda pair: pair[0])
     all_learnings: list[Learning] = []
     for _, seg_learnings in indexed_learnings:
         all_learnings.extend(seg_learnings)
 
-    # Cap at max_learnings by confidence descending, preserving order for ties
     if len(all_learnings) > max_learnings:
         indexed = list(enumerate(all_learnings))
         indexed.sort(key=lambda pair: (-pair[1].confidence, pair[0]))

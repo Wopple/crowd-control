@@ -34,8 +34,14 @@ crowd-control/
 │       ├── ingest/
 │       │   ├── __init__.py
 │       │   ├── parser.py          # JSONL parsing, segmentation, session discovery
-│       │   ├── distiller.py       # LLM-powered learning extraction via claude -p
-│       │   └── pipeline.py        # End-to-end ingestion: parse → distill → embed → store
+│       │   ├── distiller.py       # LLM-powered learning extraction (orchestration)
+│       │   ├── pipeline.py        # End-to-end ingestion: parse → distill → embed → store
+│       │   └── llm/
+│       │       ├── __init__.py    # Re-exports DistillerLLM, ClaudeCLILLM, create_distiller_llm
+│       │       ├── base.py        # DistillerLLM protocol, factory, DistillationError
+│       │       ├── claude.py      # ClaudeCLILLM — subprocess: claude -p
+│       │       ├── ollama.py      # OllamaLLM — local Ollama via the ollama Python client
+│       │       └── status.py      # check_distillation_status (used by `crowd-control status`)
 │       ├── embed/
 │       │   ├── __init__.py
 │       │   ├── base.py            # Embedder protocol, factory, EmbeddingError
@@ -57,7 +63,11 @@ crowd-control/
     ├── test_config.py             # Configuration loading tests
     ├── test_models.py             # Data model construction and serialization tests
     ├── test_parser.py             # JSONL parser and segmentation tests
-    ├── test_distiller.py          # Distillation pipeline tests (mocked subprocess)
+    ├── test_distiller.py          # Distillation pipeline tests (FakeLLM + mocked subprocess)
+    ├── test_distillation_model_parser.py   # Tests for parse_distillation_model + DistillationConfig
+    ├── test_distiller_llm_factory.py       # Factory routing tests
+    ├── test_ollama_llm.py                  # OllamaLLM unit tests (mocked ollama client)
+    ├── test_distillation_status.py         # Readiness check tests
     ├── test_embedder.py           # Embedding protocol and provider tests
     ├── test_hooks.py              # Hook handler logic tests (SessionEnd, spawn_worker)
     ├── test_storage.py            # LanceDB storage, vector search, active count, has_session tests
@@ -94,8 +104,12 @@ crowd-control/
 | `worker.py` | Implemented — queue processing, retry with attempt tracking, failed job handling |
 | `setup.py` | Implemented — MCP config, hook config, prerequisites, JSON merging, global/project scope |
 | `ingest/parser.py` | Implemented — parsing, segmentation, discovery |
-| `ingest/distiller.py` | Implemented — prompt building, claude -p invocation, learning extraction |
+| `ingest/distiller.py` | Implemented — prompt building, segment filtering, concurrent session orchestration |
 | `ingest/pipeline.py` | Implemented — end-to-end parse → distill → embed → store |
+| `ingest/llm/base.py` | Implemented — DistillerLLM protocol, factory, DistillationError |
+| `ingest/llm/claude.py` | Implemented — ClaudeCLILLM with CLAUDECODE + CROWD_CONTROL_INGESTING guards |
+| `ingest/llm/ollama.py` | Implemented — OllamaLLM with explicit HTTP timeout, format=schema |
+| `ingest/llm/status.py` | Implemented — readiness check for both providers |
 | `embed/base.py` | Implemented — Embedder protocol, factory with error wrapping, EmbeddingError |
 | `embed/ollama.py` | Implemented — Ollama provider with dimension lookup |
 | `embed/voyage.py` | Implemented — Voyage AI provider with API key validation |

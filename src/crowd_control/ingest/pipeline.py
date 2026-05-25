@@ -10,6 +10,7 @@ from pathlib import Path
 from crowd_control.config import CrowdControlConfig
 from crowd_control.embed.base import create_embedder
 from crowd_control.ingest.distiller import distill_session
+from crowd_control.ingest.llm.base import create_distiller_llm
 from crowd_control.ingest.parser import parse_session_file
 from crowd_control.storage.db import LearningStore
 
@@ -64,8 +65,8 @@ def ingest_session(
     session = parse_session_file(session_path)
 
     # 2. Distill
+    llm = create_distiller_llm(config.distillation)
     distill_kwargs: dict = {
-        "model": config.distillation.model,
         "max_learnings": config.distillation.max_learnings_per_session,
         "progress_callback": _wrap_progress(progress_callback, "distilling"),
     }
@@ -73,7 +74,7 @@ def ingest_session(
         distill_kwargs["max_workers"] = max_workers
 
     logger.info("Distilling %d segments", len(session.segments))
-    learnings = distill_session(session, **distill_kwargs)
+    learnings = distill_session(session, llm, **distill_kwargs)
 
     if not learnings:
         return IngestResult(

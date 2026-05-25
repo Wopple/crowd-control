@@ -59,6 +59,7 @@ def _get_config_or_exit(ctx) -> CrowdControlConfig:
 def status(ctx, project):
     """Show system status and database stats."""
     from crowd_control.formatting import format_status_counts
+    from crowd_control.ingest.llm.status import check_distillation_status
 
     config = _get_config_or_exit(ctx)
     current_project = project or _detect_project()
@@ -81,6 +82,14 @@ def status(ctx, project):
         click.echo(f"Embedding: {config.embedding.provider}/{config.embedding.model}")
     except Exception as e:
         click.echo(f"Database not initialized: {e}")
+
+    ds = check_distillation_status(config.distillation)
+    click.echo("Distillation:")
+    click.echo(f"  provider: {ds.provider}")
+    click.echo(f"  model:    {ds.model}")
+    click.echo(f"  ready:    {'yes' if ds.ready else 'no'}")
+    if ds.hint:
+        click.echo(f"  hint:     {ds.hint}")
 
 
 @main.group()
@@ -172,10 +181,14 @@ def setup(ctx, project_scope):
 @click.option("--dry-run", is_flag=True, help="Parse and show structure without storing.")
 @click.option(
     "--concurrency",
-    default=8,
+    default=None,
     type=int,
-    show_default=True,
-    help="Max parallel distillation requests.",
+    show_default=False,
+    help=(
+        "Max parallel distillation requests. "
+        "Defaults to the LLM provider's recommendation "
+        "(claude: 8, ollama: 1)."
+    ),
 )
 @click.pass_context
 def ingest(ctx, path, dry_run, concurrency):
@@ -197,7 +210,8 @@ def ingest(ctx, path, dry_run, concurrency):
 
     def _cli_progress(stage: str, completed: int, total: int) -> None:
         if completed == 1:
-            click.echo(f"{stage.capitalize()} {total} segments ({concurrency} workers)...")
+            worker_label = concurrency if concurrency is not None else "auto"
+            click.echo(f"{stage.capitalize()} {total} segments ({worker_label} workers)...")
         click.echo(f"  Completed {completed}/{total}")
 
     try:
