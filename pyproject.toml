@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "crowd-control"
-version = "0.0.8"
+version = "0.0.9"
 description = "Learnings retention system for Claude Code"
 readme = "README.md"
 license = "MIT"
@@ -25,6 +25,11 @@ classifiers = [
 dependencies = [
     "click",
     "lancedb==0.29.2",
+    # lancedb 0.29.2 imports `CreateEmptyTableRequest` from lance-namespace, which was
+    # renamed to `CreateTableRequest` in lance-namespace 0.7.0, so the import crashes on
+    # startup. lancedb only declares `lance-namespace>=0.3.2` (no upper bound), so a fresh
+    # `uv tool install` resolves the latest and breaks. Pin below 0.7 until lancedb is bumped.
+    "lance-namespace<0.7",
     "mcp[cli]",
     "pydantic",
 ]

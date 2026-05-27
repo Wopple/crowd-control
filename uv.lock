@@ -355,10 +355,11 @@ wheels = [
 
 [[package]]
 name = "crowd-control"
-version = "0.0.7"
+version = "0.0.8"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
+    { name = "lance-namespace" },
     { name = "lancedb" },
     { name = "mcp", extra = ["cli"] },
     { name = "pydantic" },
@@ -384,6 +385,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "click" },
+    { name = "lance-namespace", specifier = "<0.7" },
     { name = "lancedb", specifier = "==0.29.2" },
     { name = "mcp", extras = ["cli"] },
     { name = "ollama", marker = "extra == 'ollama'", specifier = ">=0.4.0" },
